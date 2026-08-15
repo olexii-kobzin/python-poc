@@ -1,0 +1,75 @@
+name: statement
+networks:
+  backend:
+    name: backend
+    external: true
+
+x-volumes: &volumes
+  - ./src:/app/src
+  - ./tests:/app/tests
+  - ./migrations:/app/migrations
+  - ./alembic.ini:/app/alembic.ini:ro
+  - ./pyproject.toml:/app/pyproject.toml
+  - ./uv.lock:/app/uv.lock
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: cicd/docker/Dockerfile_local
+  image: statement-local:latest
+  environment:
+    PYTHONDONTWRITEBYTECODE: "1"
+  env_file: .env
+  init: true
+  restart: unless-stopped
+  volumes: *volumes
+  networks:
+    - backend
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  api:
+    <<: *app
+    command:
+      - uvicorn
+      - statement.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      - --reload
+      - --reload-dir=/app/src
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json')"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+
+  consumers:
+    <<: *app
+    command: [ "pgq", "run", "statement.consumers_main:main" ]
+    stop_grace_period: 30s
+
+  subscribers:
+    <<: *app
+    command: [ "faststream", "run", "statement.subscribers_main:app" ]
+    stop_grace_period: 30s
+
+  # docker compose run --rm tests alembic upgrade head
+  # docker compose run --rm tests
+  # docker compose run --rm tests pytest tests/infra -x
+  tests:
+    build:
+      context: .
+      dockerfile: cicd/docker/Dockerfile_local
+    image: statement-local:latest
+    env_file: .env.test
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    networks:
+      - backend
+    profiles: ["test"]
+    volumes: *volumes
+    command: ["pytest"]

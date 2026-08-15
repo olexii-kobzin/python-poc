@@ -1,0 +1,29 @@
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_CACHE_DIR=/cache/uv \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup -m appuser && \
+    install -d -o appuser -g appgroup /app /cache/uv
+
+WORKDIR /app
+USER appuser
+
+RUN --mount=type=cache,target=/cache/uv,uid=1000,gid=1000 \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
+
+COPY --chown=appuser:appgroup . /app
+
+RUN --mount=type=cache,target=/cache/uv,uid=1000,gid=1000 \
+    uv sync --locked
+
+EXPOSE 8000
+
+ENTRYPOINT []

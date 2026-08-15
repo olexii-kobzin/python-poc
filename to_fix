@@ -1,0 +1,90 @@
+ 1. Broken / correctness bugs (fix first)
+
+  - tests/conftest.py:207 overrides fast_deps.get_db_session, which doesn't exist — fast_deps only has get_session (fast_deps.py:25). The client fixture raises AttributeError, and even if the name
+  existed, the real dependency wouldn't be overridden — router tests would run against the real global engine instead of the savepoint-wrapped test session.
+  - .gitignore contains only .venv and .idea. .env (which holds an RSA private key and DB credentials), .env.test, __pycache__/, .pytest_cache/, .ruff_cache/, and src/statement.iml are all one git add
+  . away from being committed. Even a "local-only" private key shouldn't be committable.
+  - DateTimeRangeMixin is wired but disabled: CustomerAccountListQuery sets datetime_range_fields = () (schemas/account.py:88) while defining created_at_from/to — the range validation is dead code.
+  Should be ("created_at",).
+  - uq_customer_account_id_currency (account.py:68-74) is a no-op: id is already the primary key, so (id, currency) unique adds nothing. Almost certainly meant (customer_id, currency).
+  - GET /accounts/ requires sort: SortQuery.sort has no default (schemas/request.py), so a plain list request 422s. Also the path is /accounts/ (trailing slash) while everything else is /accounts —
+  inconsistent, causes redirects.
+  - Retry backoff initial_delay=timedelta(microseconds=200) (consumers/entrypoints/main.py:48,98) — almost certainly meant milliseconds or seconds; as written, retry #1 fires essentially immediately.
+  - Nullable columns typed as non-optional: CustomerAccount.updated_by: Mapped[UUID] with nullable=True (account.py:61), CustomerAccountLedger.created_by (account.py:140), Customer.updated_at
+  (customer.py:35). Under SQLAlchemy 2.0 typing the annotation should be Mapped[UUID | None]; mypy strict will report every None assignment (and CustomerAccountLedger.create(created_by=None) already
+  does exactly that).
+  - on_customer_created is not idempotent (subscribers/main.py:49): a redelivered RabbitMQ message hits the PK/email unique constraint, raises, gets redelivered/dead-lettered. The pgqueuer side has
+  dedupe_key; the AMQP side inserts blindly. Needs an upsert / ON CONFLICT DO NOTHING or an existence check.
+
+2. Architecture / layering
+
+  - The "domain" layer is not a domain layer. domain/entities/* are SQLAlchemy mapped classes importing sqlalchemy and the VersionedHistory persistence mixin. That's fine as a pattern (rich persistence
+  models), but then the domain/infra/app/read split is cosplay: pick either honest layered-with-ORM-models or actual DDD with mapping — the current halfway state costs the boilerplate of both and
+  gives the isolation of neither.
+  - Abstractions leak downward. The app-layer interface app/repository.py returns infra classes (CustomerAccountLedgerVerified, CustomerAccountLedgerDiscrepancy) and API schemas
+  (CustomerAccountDisplay) — an "abstract" repository coupled to both persistence and presentation. The read repository returning response schemas directly (read/repository/account.py:126) means
+  presentation formatting (FormattedDateTime) is baked into the data access layer.
+  - The router bypasses its own abstractions: discrepancy endpoints annotate the concrete CustomerAccountLedgerVerificationRepositoryImpl (routers/admin/account.py:166,207) instead of the ABC;
+  create_customer_account does entity construction, ledger seeding, event building, and enqueueing inline — there's no application-service layer, so the transaction script lives in the HTTP handler and
+  is duplicated conceptually across handlers/consumers.
+  - Two parallel DI modules (deps.py and fast_deps.py) where fast_deps mostly wraps deps one-to-one (get_customer_account_repo → await deps.get_customer_account_repo(session)). This duplication is
+  exactly what caused the broken test override. Either make deps.py framework-neutral factories (no generators) consumed by both, or collapse them.
+  - Model placement is inconsistent: mapped tables live in domain/entities, and infra/models, on the same Base. LedgerDiscrepancyKind lives in infra/models but is used by API schemas; discrepancy kind
+  is stored as Text while the sibling tables use sa.Enum(native_enum=False).
+  - Response schema inherits request schema: CustomerAccountDisplay(CustomerAccountCreate) (schemas/account.py:39) means output rows must pass input validation (name min-length 3, currency restricted
+  to the Currency enum, customer_id required). One legacy/imported row with a short name or a retired currency and the list endpoint 500s on serialization. Keep request and response models separate.
+  - API surface: no version prefix, no /health endpoint (compose healthcheck pings /openapi.json), no global exception handler, and the admin router has no prefix/tag — permissions say admin.* but
+  paths are /accounts.
+
+3. Async processing & messaging
+
+  - Permanent failures are retried as if transient: unknown account, inactive account, and insufficient balance all raise RetryRequested (entrypoints/main.py:122-176). Unknown-account can be a
+  legitimate "wait for eventual consistency" case, but insufficient funds and inactive account won't heal with retries — they burn 3 attempts and land in hold. Distinguish retryable from terminal
+  outcomes.
+  - Undecodable payloads are silently swallowed: from_payload_bytes returns None and the handler return Nones (entrypoints/main.py:56, 107) — the job is marked successful. A poison message should go to
+  the failure path, not vanish with a WARNING log.
+  - main.py API startup depends on RabbitMQ (main.py:20): the broker is started in the FastAPI lifespan, but no HTTP endpoint publishes to Rabbit (creation goes through pgqueuer). Rabbit being down
+  takes the whole API down for no benefit.
+  - Debug leftovers: the hello_5s schedule with print() (schedulers/main.py:16-18).
+  - log.warning used as an audit level for normal successful operations (account.created, account.updated…). That's working around LOG_LEVEL=WARNING; use INFO for audit events and configure the level,
+  or the log semantics rot.
+  - BaseAsyncEvent vs BaseAsyncCommand (events/base.py, commands/base.py) are literally identical, and CreatePayment — a command — subclasses BaseAsyncEvent. Also @abstractmethod def dedupe_key(...) ->
+  str: return "" — an abstract method with a body is confusing; and the whole event/command base could be one generic module.
+
+4. Data model / persistence
+
+  - Column named id that isn't the row identity: on customer_account_ledger, ..._verified, and ..._discrepancy, id is actually the account id (part of a composite PK). Every query reads as WHERE l.id =
+  :account_id, which will mislead everyone forever. Rename to account_id.
+  - FormattedDateTime drops timezone info ("%Y-%m-%d %H:%M:%S", schemas/response.py) — API emits ambiguous timestamps. Use ISO 8601 with offset.
+  - Enum values assigned as strings: CustomerAccount.create passes status=status.value and Customer.create likewise, while the columns are typed Mapped[CustomerAccountStatus]. Works because of StrEnum,
+  but it defeats the typing — pass the enum.
+  - The versioned-history mixin's default_version_from_history runs a SELECT max(version) subquery per INSERT (versioned_history.py:141-157); the inline comment itself says it can be 1 if PKs are never
+  reused (they're UUIDv7 — they aren't). Cheap win.
+  - Commented-out relationship code left in account.py:64-66,142, commented-out dotenv loading in conf.py — delete or resolve.
+  - The _BATCH_SQL verification query is a 100-line raw SQL string inside the repository. It's good SQL, but it's untestable in isolation and invisible to tooling — consider moving to a dedicated
+  module/file with its own focused tests (some of that may exist in the scheduler tests, but the query deserves direct ones).
+
+5. Packaging / tooling / repo hygiene
+
+  - pytest is a production dependency (pyproject.toml:17) — move to the dev group. Dev group has only ruff; mypy is configured (strict = true) but not installed anywhere.
+  - pydantic-settings is used directly (conf.py) but not declared — it arrives transitively via fastapi[standard]. Same for pydantic itself. Declare what you import.
+  - email-validator appears unused (Customer.email is a plain str). [tool.fastapi] entrypoint isn't a recognized config table. description = "Add your description here" placeholder.
+  - No CI: cicd/ contains only Dockerfiles — no lint/type/test pipeline, no pre-commit config despite ruff+mypy being configured.
+  - Git state: branch is master while the default branch is main; the initial commit still contains src/backoffice/ (now deleted in the working tree) and virtually the entire project is untracked —
+  worth cleaning up into a real baseline commit once .gitignore is fixed.
+  - runtime Docker stage has ENTRYPOINT [] and no CMD — the image does nothing by default; document or set per-service commands. EXPOSE 8000 is meaningless for consumer/subscriber services. Compose
+  depends on an external backend network and out-of-repo Postgres/RabbitMQ — fine for you, but undocumented (README presumably doesn't cover it).
+
+6. Code quality / syntax-level (ruff/mypy will catch most, listed for completeness)
+
+  - Unused imports: deps.py (AsyncIterator, asynccontextmanager, Annotated, Customer), subscribers_main.py is clean but tests/utils/auth.py imports Optional/Callable unused, read/repository/account.py
+  imports ColumnElement/UUID unused, schemas/request.py TypeVar leftover alongside PEP 695 generics.
+  - Dead code: InvalidPaginationCursor defined twice (schemas/request.py, schemas/response.py), never raised.
+  - Typo: updated_customer_account handler name (routers/admin/account.py:80).
+  - reconstructor imported but unused (domain/entities/account.py:9); import ... UnaryExpression typed as UnaryExpression[SQLColumnExpression[Any]] in read/repository/account.py:56 is wrong
+  parametrization (UnaryExpression[Any]).
+  - Mixed old/new typing style: AsyncGenerator[AsyncSession, None] vs AsyncIterator elsewhere; TypeVar("T") next to class PaginatedQuery[T].
+  - read/repository/account.py cursor assembly is hard to follow (cursor_accepted mutated across three blocks, dict keyed by SortField but looked up by str) — works only because of StrEnum; worth a
+  refactor pass with tests.
+
+
