@@ -1,29 +1,35 @@
 from datetime import timedelta
 
+import structlog
 from pgqueuer import PgQueuer, RetryRequested
 from pgqueuer.models import Context, Job
 from pydantic import ValidationError
-import structlog
-
-from statement.app.errors.main import TerminalJobError
-from statement.domain.entities.account import CustomerAccountStatus, CustomerAccountLedger
 
 from statement.app.commands.local.main import CreatePayment
 from statement.app.consumers.executor import DlqRetryEntrypointExecutor
-from statement.app.messages_base import BaseAsyncMessage
+from statement.app.errors.main import TerminalJobError
+from statement.app.events.distributed.outgoing.main import (
+    CustomerAccountCreated as CustomerAccountCreatedOutgoing,
+)
 from statement.app.events.local.main import CustomerAccountCreated
-from statement.app.events.distributed.outgoing.main import CustomerAccountCreated as CustomerAccountCreatedOutgoing
+from statement.app.messages_base import BaseAsyncMessage
 from statement.app.subscribers.base import events_exchange
+from statement.domain.entities.account import (
+    CustomerAccountLedger,
+    CustomerAccountStatus,
+)
 from statement.infra.repository.account import CustomerAccountRepositoryImpl
 
 _PAYLOAD_LOG_LIMIT = 200
 
 log = structlog.get_logger(__name__)
 
+
 def _payload_preview(payload: bytes | None) -> str | None:
     if not payload:
         return None
     return payload[:_PAYLOAD_LOG_LIMIT].decode("utf-8", errors="replace")
+
 
 def _decode_or_fail[T: BaseAsyncMessage](message_cls: type[T], job: Job) -> T:
     reason = "empty payload"
@@ -49,7 +55,8 @@ def _decode_or_fail[T: BaseAsyncMessage](message_cls: type[T], job: Job) -> T:
 
     return event
 
-def register_entrypoints(pgq: PgQueuer):
+
+def register_entrypoints(pgq: PgQueuer) -> None:
     async def on_job_last_attempt(
         job: Job,
         context: Context,
@@ -103,7 +110,6 @@ def register_entrypoints(pgq: PgQueuer):
         )
 
         return None
-
 
     @pgq.entrypoint(
         CreatePayment.route(),
@@ -198,4 +204,3 @@ def register_entrypoints(pgq: PgQueuer):
             await session.commit()
 
         return None
-

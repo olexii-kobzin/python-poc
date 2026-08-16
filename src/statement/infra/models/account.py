@@ -30,9 +30,7 @@ class CustomerAccountLedgerVerified(Base):
         sa.Uuid(),
         sa.ForeignKey("customer_account.id"),
     )
-    through_no: Mapped[int] = mapped_column(
-        sa.BigInteger()
-    )
+    through_no: Mapped[int] = mapped_column(sa.BigInteger())
     balance: Mapped[Decimal] = mapped_column(
         sa.Numeric(
             precision=16,

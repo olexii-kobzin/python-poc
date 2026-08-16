@@ -42,6 +42,4 @@ COPY --chown=appuser:appgroup migrations ./migrations
 
 USER appuser
 
-EXPOSE 8000
-
 ENTRYPOINT []

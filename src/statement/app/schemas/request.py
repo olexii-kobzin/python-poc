@@ -1,19 +1,20 @@
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import Any, TypeVar, Annotated
+from typing import Annotated, Any
 
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, Field, field_validator
 
 from statement.app.schemas.base import SortDirection
 
-T = TypeVar("T")
 
 class InvalidPaginationCursor(ValueError):
     pass
 
+
 class PaginatedQuery[T](BaseModel):
     cursor: T | None = None
     count: Annotated[int | None, Field(ge=1, le=100)] = None
+
 
 class SortRequest[T: StrEnum](BaseModel):
     field: T
@@ -21,7 +22,7 @@ class SortRequest[T: StrEnum](BaseModel):
 
 
 class SortQuery[T: StrEnum](BaseModel, ABC):
-    sort: tuple[SortRequest[T], ...] | None = Field(
+    sort: tuple[SortRequest[T], ...] = Field(
         default=None,
         validate_default=True,
     )
@@ -37,10 +38,12 @@ class SortQuery[T: StrEnum](BaseModel, ABC):
 
         if value is None:
             default = cls._default_sort()
-            parsed.append({
-                "field": default.field,
-                "dir": default.dir.value,
-            })
+            parsed.append(
+                {
+                    "field": default.field,
+                    "dir": default.dir.value,
+                }
+            )
             return parsed
 
         if not isinstance(value, (list, tuple)):
@@ -54,9 +57,11 @@ class SortQuery[T: StrEnum](BaseModel, ABC):
             if not separator or not field or not direction:
                 raise ValueError("Sort must use the format '<field>:<asc|desc>'")
 
-            parsed.append({
-                "field": field,
-                "dir": direction,
-            })
+            parsed.append(
+                {
+                    "field": field,
+                    "dir": direction,
+                }
+            )
 
         return parsed

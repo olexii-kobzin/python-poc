@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from statement.domain.entities.customer import Customer
 from statement.domain.entities.account import CustomerAccount, CustomerAccountLedger
+from statement.domain.entities.customer import Customer
+
 
 class CustomerRepository(ABC):
     @abstractmethod
     async def find_by_id(self, entity_id: UUID) -> Customer | None:
         pass
+
 
 class CustomerAccountRepository(ABC):
     @abstractmethod

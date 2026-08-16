@@ -3,16 +3,31 @@ from typing import Annotated
 from uuid import UUID, uuid7
 
 import structlog
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Security, status, Query
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Security,
+    status,
+)
 from pgqueuer import Queries
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from statement import fast_deps
+from statement.app.events.local.main import CustomerAccountCreated
 from statement.app.permissions import Permission
 from statement.app.repository import CustomerAccountReadRepository
-from statement.app.schemas.account import CustomerAccountCreate, CustomerAccountUpdate, CustomerAccountDisplay, \
-    CustomerAccountListQuery, LedgerDiscrepancyDisplay, LedgerDiscrepancyResolve
-from statement.app.events.local.main import CustomerAccountCreated
+from statement.app.schemas.account import (
+    CustomerAccountCreate,
+    CustomerAccountDisplay,
+    CustomerAccountListQuery,
+    CustomerAccountUpdate,
+    LedgerDiscrepancyDisplay,
+    LedgerDiscrepancyResolve,
+)
 from statement.app.schemas.response import PaginatedResponse, PaginatedResponseMeta
 from statement.domain.entities import CustomerAccount
 from statement.domain.entities.account import (
@@ -69,7 +84,7 @@ async def create_customer_account(
     await queries.enqueue(
         entrypoint=event.route(),
         payload=event.to_payload_bytes(),
-        dedupe_key=event.dedupe_key()
+        dedupe_key=event.dedupe_key(),
     )
 
     await session.commit()

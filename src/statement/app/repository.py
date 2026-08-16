@@ -1,22 +1,27 @@
 from abc import ABC, abstractmethod
 from decimal import Decimal
-
 from uuid import UUID
 
 from statement.app.dto.main import AccountVerification
-from statement.app.schemas.account import CustomerAccountDisplay, CustomerAccountListQuery, \
-    CustomerAccountListQueryCursor
-from statement.infra.models import CustomerAccountLedgerVerified, CustomerAccountLedgerDiscrepancy
+from statement.app.schemas.account import (
+    CustomerAccountDisplay,
+    CustomerAccountListQuery,
+    CustomerAccountListQueryCursor,
+)
+from statement.infra.models import (
+    CustomerAccountLedgerDiscrepancy,
+    CustomerAccountLedgerVerified,
+)
 
 
 class CustomerAccountReadRepository(ABC):
-
     @abstractmethod
     async def list_all(
         self,
         query: CustomerAccountListQuery,
     ) -> tuple[list[CustomerAccountDisplay], CustomerAccountListQueryCursor | None]:
         pass
+
 
 class CustomerAccountLedgerVerificationRepository(ABC):
     @abstractmethod

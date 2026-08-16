@@ -5,7 +5,6 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from structlog.testing import capture_logs
 
 from statement.app.permissions import Permission
 from statement.domain.entities.account import CustomerAccount, CustomerAccountStatus

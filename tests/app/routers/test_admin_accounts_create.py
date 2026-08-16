@@ -7,7 +7,6 @@ import sqlalchemy as sa
 from fastapi import status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from structlog.testing import capture_logs
 
 from statement.app.permissions import Permission
 from statement.domain.entities.account import (
@@ -34,9 +33,7 @@ async def add_customer(session: AsyncSession) -> Customer:
     return customer
 
 
-async def add_account(
-    session: AsyncSession, customer: Customer
-) -> CustomerAccount:
+async def add_account(session: AsyncSession, customer: Customer) -> CustomerAccount:
     account = CustomerAccount(
         id=uuid7(),
         customer_id=customer.id,
@@ -99,8 +96,9 @@ async def test_create_account_with_permission(
             "amount": Decimal("0.00"),
             "balance": Decimal("0.00"),
             "operation_type": LedgerOperationType.CREATE,
-        }
+        },
     )
+
 
 @pytest.mark.anyio
 async def test_create_account_without_token(

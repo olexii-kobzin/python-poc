@@ -13,7 +13,6 @@ it forces rows to become visible in ``no`` order, so nothing can ever appear
 *behind* a checkpoint.
 """
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -136,7 +135,10 @@ LEFT JOIN first_break fb ON fb.account_id = t.account_id
 """
 )
 
-class CustomerAccountLedgerVerificationRepositoryImpl(CustomerAccountLedgerVerificationRepository):
+
+class CustomerAccountLedgerVerificationRepositoryImpl(
+    CustomerAccountLedgerVerificationRepository
+):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 

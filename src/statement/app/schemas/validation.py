@@ -21,14 +21,10 @@ class DateTimeRangeMixin(BaseModel):
                 None,
             )
 
-            if (
-                date_from is not None
-                and date_to is not None
-                and date_from > date_to
-            ):
+            if date_from is not None and date_to is not None and date_from > date_to:
                 raise ValueError(
-                    f"{field_name}_from must be earlier than or equal to "
-                    f"{field_name}_to"
+                    f"{field_name}_from must be earlier than or equal"
+                    f" to {field_name}_to"
                 )
 
         return self

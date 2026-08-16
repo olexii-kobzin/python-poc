@@ -1,12 +1,12 @@
 from logging.config import fileConfig
 
 from alembic import context
+from alembic.runtime.environment import NameFilterParentNames, NameFilterType
 from pgqueuer.domain.settings import DBSettings
 from sqlalchemy import engine_from_config, pool
 
 from statement.conf import settings
 from statement.domain.entities.base import Base
-from statement.infra import models
 
 # pgqueuer owns its own schema (`pgq upgrade` / `pgq install`), so keep
 # autogenerate from reflecting its tables and emitting drop_table for them.
@@ -19,10 +19,15 @@ EXCLUDED_TABLES = {
 }
 
 
-def include_name(name, type_, parent_names) -> bool:
+def include_name(
+    name: str | None,
+    type_: NameFilterType,
+    parent_names: NameFilterParentNames,
+) -> bool:
     if type_ == "table":
         return name not in EXCLUDED_TABLES
     return True
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -11,6 +11,7 @@ class BaseInboundDistributedMessage(BaseModel, ABC):
     @abstractmethod
     def route(cls) -> str: ...
 
+
 class BaseOutgoingDistributedMessage(BaseModel, ABC):
     model_config = ConfigDict(frozen=True)
 
@@ -20,6 +21,7 @@ class BaseOutgoingDistributedMessage(BaseModel, ABC):
 
     def to_payload_bytes(self) -> bytes:
         return self.model_dump_json().encode("utf-8")
+
 
 class BaseAsyncMessage(BaseModel, ABC):
     @classmethod

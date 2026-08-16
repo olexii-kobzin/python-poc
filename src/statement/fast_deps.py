@@ -1,25 +1,20 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, SecurityScopes
-from faststream.rabbit import RabbitBroker
 from jwt import InvalidTokenError
 from pgqueuer import Queries
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from statement import deps
 from statement.app.repository import (
-    CustomerAccountReadRepository,
     CustomerAccountLedgerVerificationRepository,
+    CustomerAccountReadRepository,
 )
 from statement.conf import AppEnv, settings
 from statement.domain.repository import CustomerAccountRepository
 from statement.infra.auth import Principal, TokenVerifier
-from statement.infra.repository.account import CustomerAccountRepositoryImpl
-from statement.infra.repository.ledger_verification import (
-    CustomerAccountLedgerVerificationRepositoryImpl,
-)
 from statement.read.repository.account import CustomerAccountReadRepositoryImpl
 
 get_session = deps.get_session

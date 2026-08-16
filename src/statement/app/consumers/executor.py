@@ -30,7 +30,7 @@ class DlqRetryEntrypointExecutor(EntrypointExecutor):
             delay = min(
                 self.initial_delay * (self.backoff_multiplier**job.attempts),
                 self.max_delay,
-                )
+            )
             raise errors.RetryRequested(delay=delay, reason=str(e)) from e
 
     async def _fail(

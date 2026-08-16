@@ -19,7 +19,7 @@ app = FastStream(broker)
 
 
 @app.after_startup
-async def after_startup_hook():
+async def after_startup_hook() -> None:
     await broker.declare_exchange(commands_exchange)
     await broker.declare_exchange(commands_dlx)
     await broker.declare_exchange(events_exchange)

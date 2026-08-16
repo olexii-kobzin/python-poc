@@ -1,6 +1,7 @@
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from statement.app.routers.admin import account
@@ -11,7 +12,7 @@ setup_logging("statement-api")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     setup_logging("statement-api")  # re-apply after uvicorn boots
     try:
         yield
@@ -23,7 +24,10 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.middleware("http")
-async def logging_ctx(request: Request, call_next):
+async def logging_ctx(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     clear_contextvars()
     bind_contextvars(request_id=request.headers.get("x-request-id"))
     return await call_next(request)

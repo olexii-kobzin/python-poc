@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Self
 from uuid import UUID

@@ -8,13 +8,18 @@ import anyio
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-from faststream.rabbit import TestRabbitBroker
+from faststream.rabbit import RabbitBroker, TestRabbitBroker
 from httpx import ASGITransport, AsyncClient
 from pgqueuer import PgQueuer
 from pgqueuer.models import Context, Job, Schedule, ScheduleContext
-from pgqueuer.types import JobId
+from pgqueuer.types import JobId, ScheduleId
 from sqlalchemy import NullPool
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine, AsyncEngine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from statement import deps, fast_deps
 from statement.app.consumers.entrypoints.main import register_entrypoints
@@ -64,16 +69,18 @@ def auth_headers(rsa_private_key: RSAPrivateKey) -> AuthHeaders:
 
 
 @pytest.fixture
-async def broker() -> AsyncIterator[TestRabbitBroker]:
+# TestRabbitBroker is only the patching context manager; entering it
+# yields the passed-in RabbitBroker itself, patched for in-memory delivery
+async def broker() -> AsyncIterator[RabbitBroker]:
     real_broker = deps.get_broker()
     original_publish = real_broker.publish
-    real_broker.publish = AsyncMock()
+    real_broker.publish = AsyncMock()  # type: ignore[method-assign]
 
     try:
         async with TestRabbitBroker(real_broker) as test_broker:
             yield test_broker
     finally:
-        real_broker.publish = original_publish
+        real_broker.publish = original_publish  # type: ignore[method-assign]
 
 
 @pytest.fixture(scope="session")
@@ -83,6 +90,7 @@ def db_engine() -> AsyncEngine:
         echo=False,
         poolclass=NullPool,
     )
+
 
 @pytest.fixture
 async def session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
@@ -107,10 +115,10 @@ async def session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 @pytest.fixture
 async def pg_queuer(
     session: AsyncSession,
-    broker: TestRabbitBroker,
+    broker: RabbitBroker,
 ) -> AsyncIterator[PgQueuer]:
     @asynccontextmanager
-    async def session_scope():
+    async def session_scope() -> AsyncIterator[AsyncSession]:
         yield session
 
     pgq = PgQueuer.in_memory(
@@ -170,7 +178,7 @@ async def run_schedule(pg_queuer: PgQueuer) -> Callable[[str], Awaitable[None]]:
             now = datetime.now(UTC)
             await executor.execute(
                 Schedule(
-                    id=1,
+                    id=ScheduleId(1),
                     expression=key.expression,
                     entrypoint=key.entrypoint,
                     heartbeat=now,

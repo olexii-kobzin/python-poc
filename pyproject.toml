@@ -1,7 +1,7 @@
 [project]
 name = "statement"
 version = "0.1.0"
-description = "Add your description here"
+description = "Test project"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -13,8 +13,9 @@ dependencies = [
     "httpx>=0.28.1",
     "pgqueuer[asyncpg]>=1.1.1",
     "psycopg[binary]>=3.3.4",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.2",
     "pyjwt[crypto]>=2.13.0",
-    "pytest>=9.1.1",
     "sqlalchemy[asyncio]>=2.0.51",
     "structlog>=26.1.0",
 ]
@@ -30,9 +31,21 @@ log_level = "WARNING"
 
 [tool.mypy]
 strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# asyncpg publishes no type information (no py.typed marker)
+module = "asyncpg.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# vendored from SQLAlchemy's versioned_history example: mapper metaprogramming
+# mypy cannot follow; only its public surface (versioned_session) is typed
+module = "statement.persistence.versioned_history"
+ignore_errors = true
 
 [tool.ruff]
-line-length = 89
+line-length = 88
 
 [tool.ruff.lint]
 select = [
@@ -56,5 +69,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
     "ruff>=0.16.0",
 ]

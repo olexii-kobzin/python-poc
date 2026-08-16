@@ -1,12 +1,12 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
 import sqlalchemy as sa
-from sqlalchemy import UniqueConstraint, PrimaryKeyConstraint, Index
-from sqlalchemy.orm import Mapped, mapped_column, relationship, reconstructor
+from sqlalchemy import Index, PrimaryKeyConstraint, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from statement.domain.entities.base import Base
 from statement.persistence.versioned_history import VersionedHistory
@@ -68,9 +68,7 @@ class CustomerAccount(Base, VersionedHistory):
 
     __table_args__ = (
         UniqueConstraint(
-            "customer_id",
-            "currency",
-            name="uq_customer_account_customer_id_currency"
+            "customer_id", "currency", name="uq_customer_account_customer_id_currency"
         ),
     )
 
@@ -107,9 +105,7 @@ class CustomerAccountLedger(Base):
         sa.Uuid(),
         sa.ForeignKey("customer_account.id"),
     )
-    no: Mapped[int] = mapped_column(
-        sa.BigInteger()
-    )
+    no: Mapped[int] = mapped_column(sa.BigInteger())
     amount: Mapped[Decimal] = mapped_column(
         sa.Numeric(
             precision=16,

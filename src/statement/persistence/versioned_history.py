@@ -1,6 +1,7 @@
 """Versioned mixin class and other utilities."""
 
 import datetime
+from typing import Any, ClassVar
 
 from sqlalchemy import (
     Column,
@@ -12,7 +13,7 @@ from sqlalchemy import (
     inspect,
     util,
 )
-from sqlalchemy.orm import attributes, object_mapper
+from sqlalchemy.orm import Mapper, Session, attributes, object_mapper
 from sqlalchemy.orm.exc import UnmappedColumnError
 from sqlalchemy.orm.relationships import RelationshipProperty
 
@@ -107,7 +108,9 @@ def _history_mapper(local_mapper):
             Column(
                 "changed",
                 DateTime,
-                default=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None),
+                default=lambda: datetime.datetime.now(datetime.UTC).replace(
+                    tzinfo=None
+                ),
                 info=version_meta,
             )
         )
@@ -192,6 +195,9 @@ def _history_mapper(local_mapper):
 class VersionedHistory:
     use_mapper_versioning = False
     """if True, also assign the version column to be tracked by the mapper"""
+
+    __history_mapper__: ClassVar[Mapper[Any]]
+    """mapper of the generated <name>History class; set by _history_mapper()"""
 
     def __init_subclass__(cls) -> None:
         insp = inspect(cls, raiseerr=False)
@@ -297,7 +303,7 @@ def create_version(obj, session, deleted=False):
     obj.version += 1
 
 
-def versioned_session(session):
+def versioned_session(session: type[Session]) -> None:
     @event.listens_for(session, "before_flush")
     def before_flush(session, flush_context, instances):
         for obj in versioned_objects(session.dirty):

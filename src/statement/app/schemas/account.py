@@ -2,10 +2,10 @@ import base64
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Self, Any, Annotated, Literal
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, Field, field_validator
 
 from statement.app.schemas.base import SortDirection
 from statement.app.schemas.request import PaginatedQuery, SortQuery, SortRequest
@@ -22,20 +22,18 @@ class SortField(StrEnum):
     CREATED_AT = "created_at"
 
 
-class CustomerAccountBase(BaseModel):
+class CustomerAccountCreate(BaseModel):
     name: Annotated[str, Field(min_length=3, max_length=50)]
-
-
-class CustomerAccountCreate(CustomerAccountBase):
     customer_id: UUID
     currency: Currency
 
 
-class CustomerAccountUpdate(CustomerAccountBase):
+class CustomerAccountUpdate(BaseModel):
     name: Annotated[str | None, Field(min_length=3, max_length=50)] = None
     status: (
         Literal[CustomerAccountStatus.ACTIVE, CustomerAccountStatus.DISABLED] | None
     ) = None
+
 
 class CustomerAccountDisplay(BaseModel):
     id: UUID
@@ -46,6 +44,7 @@ class CustomerAccountDisplay(BaseModel):
     created_at: FormattedDateTime
     updated_at: FormattedDateTime
     updated_by: UUID | None
+
 
 class LedgerDiscrepancyDisplay(BaseModel):
     id: UUID
@@ -84,6 +83,7 @@ class CustomerAccountListQueryCursor(BaseModel):
         decoded = base64.urlsafe_b64decode(cursor.encode("utf-8")).decode("utf-8")
         return cls.model_validate_json(decoded)
 
+
 class CustomerAccountListQuery(
     SortQuery[SortField],
     PaginatedQuery[CustomerAccountListQueryCursor],
@@ -114,4 +114,3 @@ class CustomerAccountListQuery(
             raise ValueError("Cursor value must be a string")
 
         return CustomerAccountListQueryCursor.decode(value)
-

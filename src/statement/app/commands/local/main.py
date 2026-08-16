@@ -8,6 +8,7 @@ from pydantic import Field
 from statement.app.messages_base import BaseAsyncMessage
 from statement.domain.entities.account import LedgerOperationType
 
+
 class CreatePayment(BaseAsyncMessage):
     id: UUID
     account_id: UUID

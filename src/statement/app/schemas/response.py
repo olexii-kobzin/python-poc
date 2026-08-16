@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TypeVar, Annotated
+from typing import Annotated, TypeVar
 
 from pydantic import BaseModel, PlainSerializer
 
@@ -14,8 +14,10 @@ FormattedDateTime = Annotated[
     ),
 ]
 
+
 class InvalidPaginationCursor(ValueError):
     pass
+
 
 class PaginatedResponseMeta(BaseModel):
     next_cursor: str | None = None
@@ -24,8 +26,3 @@ class PaginatedResponseMeta(BaseModel):
 class PaginatedResponse[T](BaseModel):
     data: list[T]
     meta: PaginatedResponseMeta
-
-
-
-
-

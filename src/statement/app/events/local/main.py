@@ -3,6 +3,7 @@ from uuid import UUID
 
 from statement.app.messages_base import BaseAsyncMessage
 
+
 class CustomerAccountCreated(BaseAsyncMessage):
     id: UUID
     customer_id: UUID

@@ -63,11 +63,13 @@ async def list_accounts(
     )
     assert response.status_code == status.HTTP_200_OK, response.text
 
-    return response.json()
+    payload: dict[str, Any] = response.json()
+    return payload
 
 
 def ids_of(payload: dict[str, Any]) -> list[UUID]:
     return [UUID(row["id"]) for row in payload["data"]]
+
 
 @pytest.mark.anyio
 async def test_list_sorts_by_created_at_desc(
@@ -75,13 +77,20 @@ async def test_list_sorts_by_created_at_desc(
     session: AsyncSession,
     auth_headers: AuthHeaders,
 ) -> None:
-    token, accounts = await add_accounts(session, [{
-        "currency": "EUR",
-    }, {
-        "currency": "USD",
-    }, {
-        "currency": "GBP",
-    }])
+    token, accounts = await add_accounts(
+        session,
+        [
+            {
+                "currency": "EUR",
+            },
+            {
+                "currency": "USD",
+            },
+            {
+                "currency": "GBP",
+            },
+        ],
+    )
 
     payload = await list_accounts(
         client,
@@ -104,6 +113,7 @@ async def test_list_sorts_by_created_at_desc(
         "updated_at": account.updated_at.isoformat(),
         "updated_by": str(account.updated_by),
     }
+
 
 @pytest.mark.anyio
 async def test_list_not_requires_sort(
@@ -140,13 +150,20 @@ async def test_list_sorts_by_created_at_asc(
     session: AsyncSession,
     auth_headers: AuthHeaders,
 ) -> None:
-    token, accounts = await add_accounts(session, [{
-        "currency": "EUR",
-    }, {
-        "currency": "USD",
-    }, {
-        "currency": "GBP",
-    }])
+    token, accounts = await add_accounts(
+        session,
+        [
+            {
+                "currency": "EUR",
+            },
+            {
+                "currency": "USD",
+            },
+            {
+                "currency": "GBP",
+            },
+        ],
+    )
 
     payload = await list_accounts(
         client,
@@ -190,17 +207,26 @@ async def test_list_pages_through_with_cursor(
     session: AsyncSession,
     auth_headers: AuthHeaders,
 ) -> None:
-    token, accounts = await add_accounts(session, [{
-        "currency": "EUR",
-    }, {
-        "currency": "USD",
-    }, {
-        "currency": "GBP",
-    }, {
-        "currency": "UAH",
-    }, {
-        "currency": "JPY",
-    }])
+    token, accounts = await add_accounts(
+        session,
+        [
+            {
+                "currency": "EUR",
+            },
+            {
+                "currency": "USD",
+            },
+            {
+                "currency": "GBP",
+            },
+            {
+                "currency": "UAH",
+            },
+            {
+                "currency": "JPY",
+            },
+        ],
+    )
     expected = [a.id for a in reversed(accounts)]
 
     first = await list_accounts(
@@ -314,13 +340,16 @@ async def test_list_filters_by_name_substring(
 ) -> None:
     token, accounts = await add_accounts(
         session,
-        [{
-            "currency": Currency.EUR,
-            "name": "savings",
-        }, {
-            "currency": Currency.USD,
-            "name": "current",
-        }],
+        [
+            {
+                "currency": Currency.EUR,
+                "name": "savings",
+            },
+            {
+                "currency": Currency.USD,
+                "name": "current",
+            },
+        ],
     )
     savings, _ = accounts
 
@@ -340,13 +369,20 @@ async def test_list_filters_by_created_at_range(
     session: AsyncSession,
     auth_headers: AuthHeaders,
 ) -> None:
-    token, accounts = await add_accounts(session, [{
-        "currency": Currency.EUR,
-    }, {
-        "currency": Currency.USD,
-    }, {
-        "currency": Currency.GBP,
-    }])
+    token, accounts = await add_accounts(
+        session,
+        [
+            {
+                "currency": Currency.EUR,
+            },
+            {
+                "currency": Currency.USD,
+            },
+            {
+                "currency": Currency.GBP,
+            },
+        ],
+    )
     first, second, third = accounts
 
     payload = await list_accounts(

@@ -5,19 +5,24 @@ import structlog
 from structlog.dev import ConsoleRenderer
 from structlog.processors import JSONRenderer
 from structlog.stdlib import ProcessorFormatter
+from structlog.typing import EventDict, Processor, WrappedLogger
 
 from statement.conf import AppEnv, settings
 
 
-def _add_service(service_name: str):
-    def processor(logger, method_name, event_dict):
+def _add_service(service_name: str) -> Processor:
+    def processor(
+        logger: WrappedLogger,
+        method_name: str,
+        event_dict: EventDict,
+    ) -> EventDict:
         event_dict["service"] = service_name
         return event_dict
 
     return processor
 
 
-def build_shared_processors(service_name: str) -> list:
+def build_shared_processors(service_name: str) -> list[Processor]:
     return [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
@@ -37,6 +42,8 @@ def build_shared_processors(service_name: str) -> list:
     ]
 
 
+renderer: Processor
+exc_processors: list[Processor]
 if settings.app_env == AppEnv.LOCAL:
     renderer, exc_processors = ConsoleRenderer(), []
 else:

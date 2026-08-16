@@ -1,6 +1,6 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 from uuid import uuid7
 
 import jwt

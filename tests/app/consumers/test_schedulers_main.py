@@ -4,7 +4,6 @@ from decimal import Decimal
 from uuid import UUID, uuid7
 
 import pytest
-import sqlalchemy
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.testing import capture_logs
 
@@ -151,6 +150,7 @@ async def test_full_window_is_checkpointed_behind_a_fresh_anchor(
     await run_schedule(SCHEDULE)
 
     checkpoint = await latest_checkpoint(session, account.id)
+    assert checkpoint is not None
     assert checkpoint.through_no == 6
     assert checkpoint.balance == Decimal("45.00")
 
@@ -441,7 +441,8 @@ async def test_anchor_balance_discrepancy(
     await add_ledger_rows(session, account, [Decimal("10.00")] * 3)
     # checkpoint claims row 3 held 30.00; the ledger row says otherwise
     await add_checkpoint(
-        session, account.id,
+        session,
+        account.id,
         through_no=3,
         balance=Decimal("99.00"),
         verified_at=datetime.now(UTC) - timedelta(hours=2),

@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 import anyio
@@ -31,7 +32,10 @@ def make_job(attempts: int) -> Job:
     )
 
 
-def build_executor(func, calls: list[Exception]) -> DlqRetryEntrypointExecutor:
+def build_executor(
+    func: Callable[[Job], Awaitable[None]],
+    calls: list[Exception],
+) -> DlqRetryEntrypointExecutor:
     async def on_last_attempt(job: Job, context: Context, err: Exception) -> None:
         calls.append(err)
 

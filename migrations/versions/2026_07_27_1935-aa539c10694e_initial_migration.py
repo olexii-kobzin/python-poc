@@ -83,10 +83,16 @@ def upgrade() -> None:
         sa.Column("name", sa.Text(), autoincrement=False, nullable=True),
         sa.Column("status", sa.Text(), autoincrement=False, nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), autoincrement=False, nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            autoincrement=False,
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), autoincrement=False, nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            autoincrement=False,
+            nullable=False,
         ),
         sa.Column("updated_by", sa.Uuid(), autoincrement=False, nullable=True),
         sa.Column("version", sa.Integer(), autoincrement=False, nullable=False),
@@ -167,7 +173,9 @@ def downgrade() -> None:
         table_name="customer_account_history",
     )
     op.drop_table("customer_account_history")
-    op.drop_index(op.f("ix_customer_account_customer_id"), table_name="customer_account")
+    op.drop_index(
+        op.f("ix_customer_account_customer_id"), table_name="customer_account"
+    )
     op.drop_index(op.f("ix_customer_account_created_at"), table_name="customer_account")
     op.drop_table("customer_account")
     op.drop_index(op.f("ix_customer_created_at"), table_name="customer")

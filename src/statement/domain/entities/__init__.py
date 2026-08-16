@@ -7,14 +7,14 @@ imported -- so every entity module must be imported here.
 """
 
 from statement.domain.entities.account import (
-    CustomerAccountStatus,
     CustomerAccount,
     CustomerAccountHistory,
     CustomerAccountLedger,
+    CustomerAccountStatus,
     LedgerOperationType,
 )
-from statement.domain.entities.customer import CustomerStatus, Customer
 from statement.domain.entities.base import Base
+from statement.domain.entities.customer import Customer, CustomerStatus
 
 __all__ = [
     "Base",
@@ -24,4 +24,5 @@ __all__ = [
     "CustomerAccountLedger",
     "CustomerAccountStatus",
     "CustomerStatus",
+    "LedgerOperationType",
 ]

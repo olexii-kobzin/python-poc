@@ -8,7 +8,6 @@ fetching a JWKS. Never wire any of this up outside ``AppEnv.LOCAL``.
 """
 
 import argparse
-from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
@@ -22,9 +21,11 @@ from statement.app.permissions import Permission
 from statement.conf import settings
 from statement.infra.auth import ALGORITHMS, TokenVerifier
 
+
 class UserRole(StrEnum):
     ADMIN = "admin"
     CUSTOMER = "customer"
+
 
 def _load_private_key() -> RSAPrivateKey:
     pem = settings.jwt_local_private_key
