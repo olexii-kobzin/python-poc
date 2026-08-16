@@ -1,9 +1,6 @@
 from enum import StrEnum
 
-# from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
-
-# from pathlib import Path
 
 
 class AppEnv(StrEnum):
@@ -11,11 +8,6 @@ class AppEnv(StrEnum):
     DEV = "dev"
     PROD = "prod"
     TEST = "test"
-
-
-# project_root = Path(__file__).resolve().parents[2]
-# app_env = AppEnv(os.getenv("APP_ENV", AppEnv.LOCAL))
-# load_dotenv(project_root / f".env.{app_env.value}")
 
 
 class Settings(BaseSettings):

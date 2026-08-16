@@ -219,7 +219,7 @@ async def test_partial_window_is_checkpointed_once_anchor_goes_stale(
 
 
 @pytest.mark.anyio
-async def test_broken_chain_opens_discrepancy_and_stops_at_last_good_row(
+async def test_balance_diescrepancy(
     session: AsyncSession,
     run_schedule: RunSchedule,
 ) -> None:
@@ -283,7 +283,7 @@ async def test_broken_chain_opens_discrepancy_and_stops_at_last_good_row(
 
 
 @pytest.mark.anyio
-async def test_gap_is_reported_as_gap(
+async def test_gap_discrepancy(
     session: AsyncSession,
     run_schedule: RunSchedule,
 ) -> None:
@@ -320,9 +320,6 @@ async def test_gap_is_reported_as_gap(
         },
     }
 
-    stmt = sqlalchemy.select(CustomerAccountLedgerDiscrepancy.account_id, CustomerAccountLedgerDiscrepancy.kind)
-    rows = [item for item in (await session.execute(stmt)).mappings().all()]
-
     assert await DbTestUtil.exists(
         session,
         CustomerAccountLedgerDiscrepancy.__tablename__,
@@ -333,6 +330,65 @@ async def test_gap_is_reported_as_gap(
             "prev_no": 2,
             "expected_balance": None,
             "actual_balance": Decimal("30.00"),
+        },
+    )
+
+    checkpoint = await latest_checkpoint(session, account.id)
+    assert checkpoint is not None
+    assert checkpoint.through_no == 2
+    assert checkpoint.balance == Decimal("20.00")
+
+
+@pytest.mark.anyio
+async def test_gap_balance_discrepancy(
+    session: AsyncSession,
+    run_schedule: RunSchedule,
+) -> None:
+    account = await add_account(session)
+    await add_ledger_rows(session, account, [Decimal("10.00")] * 2)
+    # nos 3-4 are missing and took their +20.00 with them: row 5 chains off a
+    # balance of 40.00, but the last surviving row holds 20.00
+    await add_ledger_rows(
+        session,
+        account,
+        [Decimal("10.00")],
+        start_no=5,
+        start_balance=Decimal("40.00"),
+    )
+
+    with capture_logs() as logs:
+        await run_schedule(SCHEDULE)
+
+    warnings = [
+        entry
+        for entry in logs
+        if entry["event"] == "customer_account_ledger.discrepancy"
+    ]
+    assert warnings[0] == {
+        "event": "customer_account_ledger.discrepancy",
+        "log_level": "warning",
+        "details": {
+            "account_id": str(account.id),
+            "kind": LedgerDiscrepancyKind.GAP_BALANCE,
+            "no": 5,
+            "prev_no": 2,
+            "verified_through_no": 0,
+            "expected_balance": "30.00",
+            "actual_balance": "50.00",
+        },
+    }
+
+    assert await DbTestUtil.exists(
+        session,
+        CustomerAccountLedgerDiscrepancy.__tablename__,
+        {
+            "account_id": account.id,
+            "no": 5,
+            "kind": LedgerDiscrepancyKind.GAP_BALANCE,
+            "prev_no": 2,
+            "expected_balance": Decimal("30.00"),
+            "actual_balance": Decimal("50.00"),
+            "resolved_at__isnull": True,
         },
     )
 
@@ -377,7 +433,7 @@ async def test_open_discrepancy_quarantines_the_account(
 
 
 @pytest.mark.anyio
-async def test_tampered_verified_row_is_caught(
+async def test_anchor_balance_discrepancy(
     session: AsyncSession,
     run_schedule: RunSchedule,
 ) -> None:

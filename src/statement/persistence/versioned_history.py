@@ -8,11 +8,8 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Integer,
     PrimaryKeyConstraint,
-    and_,
     event,
-    func,
     inspect,
-    select,
     util,
 )
 from sqlalchemy.orm import attributes, object_mapper
@@ -137,33 +134,15 @@ def _history_mapper(local_mapper):
                 super_history_table.append_column(col)
 
     if not super_mapper:
-
-        def default_version_from_history(context):
-            # Set default value of version column to the maximum of the
-            # version in history columns already present +1
-            # Otherwise re-appearance of deleted rows would cause an error
-            # with the next update
-            current_parameters = context.get_current_parameters()
-            return context.connection.scalar(
-                select(func.coalesce(func.max(history_table.c.version), 0) + 1).where(
-                    and_(
-                        *[
-                            history_table.c[c.name]
-                            == current_parameters.get(c.name, None)
-                            for c in inspect(local_mapper.local_table).primary_key
-                        ]
-                    )
-                )
-            )
-
         local_mapper.local_table.append_column(
             Column(
                 "version",
                 Integer,
-                # if rows are not being deleted from the main table with
-                # subsequent reuse of primary key, this default can be
-                # "1" instead of running a query per INSERT
-                default=default_version_from_history,
+                # safe only while PKs are never reused: ids are server-side
+                # uuid7 and versioned rows are soft-deleted, never removed.
+                # If either changes, restore the upstream max(version)+1
+                # query-per-INSERT default from the SQLAlchemy example.
+                default=1,
                 nullable=False,
             ),
             replace_existing=True,

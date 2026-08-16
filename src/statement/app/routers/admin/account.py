@@ -129,7 +129,6 @@ async def delete_customer_account(
     account.updated_by = principal.sub
 
     await session.commit()
-    log.warning("account.deleted", details={"id": str(account_id)})
 
 
 @router.get("/accounts")

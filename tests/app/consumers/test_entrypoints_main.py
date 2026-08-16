@@ -180,13 +180,20 @@ async def test_withdrawal_of_exact_balance_is_allowed(
 
 
 @pytest.mark.anyio
-async def test_empty_payload_is_dropped(
+async def test_empty_payload_fails_terminally(
     session: AsyncSession,
     run_entrypoint: RunEntrypoint,
 ) -> None:
     await add_account(session)
-    await run_entrypoint(CREATE_PAYMENT_ENTRYPOINT, None)
 
+    with capture_logs() as logs, pytest.raises(LastAttemptError):
+        await run_entrypoint(CREATE_PAYMENT_ENTRYPOINT, None)
+
+    assert any(
+        entry["event"] == "consumer.undecodable_payload"
+        and entry["log_level"] == "warning"
+        for entry in logs
+    )
     assert await DbTestUtil.count(session, CustomerAccountLedger.__tablename__) == 1
 
 

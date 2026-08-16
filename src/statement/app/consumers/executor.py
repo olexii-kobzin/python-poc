@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import NoReturn
 
-from pgqueuer import DatabaseRetryEntrypointExecutor, errors, models
+from pgqueuer import errors, models
 from pgqueuer.core.executors import EntrypointExecutor
 
 from statement.app.errors.main import LastAttemptError, TerminalJobError

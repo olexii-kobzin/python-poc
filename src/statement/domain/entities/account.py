@@ -65,9 +65,6 @@ class CustomerAccount(Base, VersionedHistory):
     updated_by: Mapped[UUID] = mapped_column(sa.Uuid())
 
     customer: Mapped[Customer] = relationship(back_populates="accounts")
-    # ledger: Mapped[list[CustomerAccountLedger]] = relationship(
-    #     back_populates="customer_account",
-    # )
 
     __table_args__ = (
         UniqueConstraint(
@@ -147,7 +144,6 @@ class CustomerAccountLedger(Base):
     # NULL = written by the system (e.g. payment consumers), not a human actor
     created_by: Mapped[UUID | None] = mapped_column(sa.Uuid(), nullable=True)
 
-    # customer_account: Mapped[CustomerAccount] = relationship(back_populates="ledger")
     customer_account: Mapped[CustomerAccount] = relationship()
 
     @classmethod

@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from pgqueuer import PgQueuer, RetryRequested
 from pgqueuer.models import Context, Job
+from pydantic import ValidationError
 import structlog
 
 from statement.app.errors.main import TerminalJobError
@@ -9,6 +10,7 @@ from statement.domain.entities.account import CustomerAccountStatus, CustomerAcc
 
 from statement.app.commands.local.main import CreatePayment
 from statement.app.consumers.executor import DlqRetryEntrypointExecutor
+from statement.app.messages_base import BaseAsyncMessage
 from statement.app.events.local.main import CustomerAccountCreated
 from statement.app.events.distributed.outgoing.main import CustomerAccountCreated as CustomerAccountCreatedOutgoing
 from statement.app.subscribers.base import events_exchange
@@ -22,6 +24,30 @@ def _payload_preview(payload: bytes | None) -> str | None:
     if not payload:
         return None
     return payload[:_PAYLOAD_LOG_LIMIT].decode("utf-8", errors="replace")
+
+def _decode_or_fail[T: BaseAsyncMessage](message_cls: type[T], job: Job) -> T:
+    reason = "empty payload"
+    try:
+        event = message_cls.from_payload_bytes(job.payload)
+    except ValidationError as e:
+        event = None
+        reason = str(e)
+
+    if event is None:
+        log.warning(
+            "consumer.undecodable_payload",
+            details={
+                "entrypoint": job.entrypoint,
+                "job_id": int(job.id),
+                "payload_size": len(job.payload) if job.payload else 0,
+                "payload": _payload_preview(job.payload),
+            },
+        )
+        raise TerminalJobError(
+            f"Undecodable payload for {job.entrypoint}: {reason}",
+        )
+
+    return event
 
 def register_entrypoints(pgq: PgQueuer):
     async def on_job_last_attempt(
@@ -54,19 +80,7 @@ def register_entrypoints(pgq: PgQueuer):
         ),
     )
     async def on_customer_account_created(job: Job, ctx: Context) -> None:
-        event = CustomerAccountCreated.from_payload_bytes(job.payload)
-        if event is None:
-            log.warning(
-                f"Unable to recreate event from payload"
-                f" for job {CustomerAccountCreated.route()}",
-                details={
-                    "entrypoint": job.entrypoint,
-                    "job_id": int(job.id),
-                    "payload_size": len(job.payload) if job.payload else 0,
-                    "payload": _payload_preview(job.payload),
-                },
-            )
-            raise ValueError(f"Unable to parse event {event.id}")
+        event = _decode_or_fail(CustomerAccountCreated, job)
 
         broker = ctx.resources["broker"]
 
@@ -105,9 +119,7 @@ def register_entrypoints(pgq: PgQueuer):
     )
     async def on_create_payment(job: Job, ctx: Context) -> None:
         session_scope = ctx.resources["session_scope"]
-        event = CreatePayment.from_payload_bytes(job.payload)
-        if event is None:
-            return None
+        event = _decode_or_fail(CreatePayment, job)
 
         async with session_scope() as session:
             repo = CustomerAccountRepositoryImpl(session=session)

@@ -23,7 +23,6 @@ class Customer(Base):
     id: Mapped[UUID] = mapped_column(sa.Uuid(), primary_key=True)
     email: Mapped[str] = mapped_column(sa.Text(), unique=True)
     name: Mapped[str | None] = mapped_column(sa.Text(), nullable=True)
-    # TODO: map as enum
     status: Mapped[CustomerStatus] = mapped_column(
         sa.Enum(
             CustomerStatus,
@@ -57,7 +56,7 @@ class Customer(Base):
             id=entity_id,
             email=email,
             name=name,
-            status=status.value,
+            status=status,
             created_at=created_at,
             updated_at=updated_at,
         )
