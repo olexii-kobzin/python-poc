@@ -12,6 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from statement.app import version_token
 from statement.app.repository import CustomerAccountReadRepository
 from statement.app.schemas.account import (
     CustomerAccountDisplay,
@@ -81,6 +82,9 @@ class CustomerAccountReadRepositoryImpl(CustomerAccountReadRepository):
             CustomerAccount.created_at,
             CustomerAccount.updated_at,
             CustomerAccount.updated_by,
+            # the history recipe adds "version" at mapper-configure time, so
+            # there is no class-level attribute to reference here
+            CustomerAccount.__table__.c.version,
         ).limit(limit)
 
         cursor_accepted = True
@@ -138,7 +142,12 @@ class CustomerAccountReadRepositoryImpl(CustomerAccountReadRepository):
         result = await self.session.execute(stmt)
 
         mappings = result.mappings().all()
-        mapped = [CustomerAccountDisplay.model_validate(row) for row in mappings]
+        mapped = [
+            CustomerAccountDisplay.model_validate(
+                {**row, "version": version_token.issue(row["id"], row["version"])}
+            )
+            for row in mappings
+        ]
 
         next_cursor = None
         if len(mapped) == limit:

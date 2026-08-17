@@ -7,13 +7,14 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from statement.app import version_token
+from statement.app.enums.account import LedgerDiscrepancyKind
 from statement.app.schemas.base import SortDirection
 from statement.app.schemas.request import PaginatedQuery, SortQuery, SortRequest
 from statement.app.schemas.response import FormattedDateTime
 from statement.app.schemas.validation import DateTimeRangeMixin
 from statement.domain.entities import CustomerAccountStatus
 from statement.domain.enum import Currency
-from statement.infra.models.account import LedgerDiscrepancyKind
 
 
 class SortField(StrEnum):
@@ -29,6 +30,13 @@ class CustomerAccountCreate(BaseModel):
 
 
 class CustomerAccountUpdate(BaseModel):
+    version: Annotated[
+        str,
+        Field(
+            min_length=version_token.TOKEN_LENGTH,
+            max_length=version_token.TOKEN_LENGTH,
+        ),
+    ]
     name: Annotated[str | None, Field(min_length=3, max_length=50)] = None
     status: (
         Literal[CustomerAccountStatus.ACTIVE, CustomerAccountStatus.DISABLED] | None
@@ -44,6 +52,7 @@ class CustomerAccountDisplay(BaseModel):
     created_at: FormattedDateTime
     updated_at: FormattedDateTime
     updated_by: UUID | None
+    version: str
 
 
 class LedgerDiscrepancyDisplay(BaseModel):

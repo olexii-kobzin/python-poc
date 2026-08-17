@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID, uuid7
 
@@ -17,9 +16,15 @@ from pgqueuer import Queries
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from statement import fast_deps
+from statement.app import version_token
+from statement.app.auth import Principal
+from statement.app.enums.account import LedgerDiscrepancyKind
 from statement.app.events.local.main import CustomerAccountCreated
 from statement.app.permissions import Permission
-from statement.app.repository import CustomerAccountReadRepository
+from statement.app.repository import (
+    CustomerAccountLedgerVerificationRepository,
+    CustomerAccountReadRepository,
+)
 from statement.app.schemas.account import (
     CustomerAccountCreate,
     CustomerAccountDisplay,
@@ -35,11 +40,6 @@ from statement.domain.entities.account import (
     CustomerAccountStatus,
 )
 from statement.domain.repository import CustomerAccountRepository
-from statement.infra.auth import Principal
-from statement.infra.models.account import LedgerDiscrepancyKind
-from statement.infra.repository.ledger_verification import (
-    CustomerAccountLedgerVerificationRepositoryImpl,
-)
 
 router = APIRouter(prefix="/v1")
 log = structlog.get_logger(__name__)
@@ -111,6 +111,12 @@ async def updated_customer_account(
             detail="Account not found",
         )
 
+    if not version_token.verify(account.id, account.version, account_update.version):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Account was modified by someone else; reload and retry",
+        )
+
     if account_update.name is not None:
         account.name = account_update.name
     if account_update.status is not None:
@@ -123,6 +129,13 @@ async def updated_customer_account(
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_customer_account(
     account_id: Annotated[UUID, Path()],
+    version: Annotated[
+        str,
+        Query(
+            min_length=version_token.TOKEN_LENGTH,
+            max_length=version_token.TOKEN_LENGTH,
+        ),
+    ],
     session: Annotated[AsyncSession, Depends(fast_deps.get_session)],
     repo: Annotated[
         CustomerAccountRepository,
@@ -138,6 +151,12 @@ async def delete_customer_account(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account not found",
+        )
+
+    if not version_token.verify(account.id, account.version, version):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Account was modified by someone else; reload and retry",
         )
 
     account.status = CustomerAccountStatus.DELETED
@@ -172,7 +191,7 @@ async def get_accounts(
 async def get_customer_account_ledger_discrepancy(
     id: Annotated[UUID, Path()],
     repo: Annotated[
-        CustomerAccountLedgerVerificationRepositoryImpl,
+        CustomerAccountLedgerVerificationRepository,
         Depends(fast_deps.get_ledger_verification_repo),
     ],
     principal: Annotated[
@@ -213,7 +232,7 @@ async def resolve_customer_account_ledger_discrepancy(
     resolution: Annotated[LedgerDiscrepancyResolve, Body()],
     session: Annotated[AsyncSession, Depends(fast_deps.get_session)],
     repo: Annotated[
-        CustomerAccountLedgerVerificationRepositoryImpl,
+        CustomerAccountLedgerVerificationRepository,
         Depends(fast_deps.get_ledger_verification_repo),
     ],
     principal: Annotated[
@@ -231,8 +250,8 @@ async def resolve_customer_account_ledger_discrepancy(
     it is insert-only, so the superseded row is the record of what was believed
     before, which is exactly what you want when auditing the incident later.
     """
-    discrepancy = await repo.find_open_discrepancy(id)
-    if discrepancy is None:
+    discrepancy_dto = await repo.find_open_discrepancy(id)
+    if discrepancy_dto is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No open ledger discrepancy for this account",
@@ -246,8 +265,8 @@ async def resolve_customer_account_ledger_discrepancy(
     # would not move anything and the caller has to say how far to trust
     through_no = resolution.through_no or (
         None
-        if discrepancy.kind == LedgerDiscrepancyKind.ANCHOR_BALANCE
-        else discrepancy.no
+        if discrepancy_dto.kind == LedgerDiscrepancyKind.ANCHOR_BALANCE
+        else discrepancy_dto.no
     )
     if through_no is None:
         raise HTTPException(
@@ -271,17 +290,20 @@ async def resolve_customer_account_ledger_discrepancy(
             detail=f"No ledger row {through_no} for this account",
         )
 
-    repo.add_checkpoint(account_id=id, through_no=through_no, balance=balance)
-    discrepancy.resolved_at = datetime.now(UTC)
-    discrepancy.resolved_by = principal.sub
+    await repo.add_checkpoint(account_id=id, through_no=through_no, balance=balance)
+    await repo.resolve_discrepancy(
+        discrepancy_id=discrepancy_dto.discrepancy_id,
+        account_id=discrepancy_dto.account_id,
+        resolved_by=principal.sub,
+    )
 
     await session.commit()
     log.warning(
         "customer_account_ledger.discrepancy.resolved",
         details={
             "account_id": str(id),
-            "kind": discrepancy.kind,
-            "no": discrepancy.no,
+            "kind": discrepancy_dto.kind,
+            "no": discrepancy_dto.no,
             "accepted_through_no": through_no,
             "accepted_balance": str(balance),
             "resolved_by": str(principal.sub),

@@ -30,17 +30,17 @@ async def make_queries(connection: AsyncConnection) -> Queries:
     return Queries(AsyncpgDriver(apg_connection))
 
 
-async def get_customer_repo(session: AsyncSession) -> CustomerRepository:
+def get_customer_repo(session: AsyncSession) -> CustomerRepository:
     return CustomerRepositoryImpl(session)
 
 
-async def get_customer_account_repo(
+def get_customer_account_repo(
     session: AsyncSession,
 ) -> CustomerAccountRepository:
     return CustomerAccountRepositoryImpl(session)
 
 
-async def get_ledger_verification_repo(
+def get_ledger_verification_repo(
     session: AsyncSession,
 ) -> CustomerAccountLedgerVerificationRepository:
     return CustomerAccountLedgerVerificationRepositoryImpl(session)

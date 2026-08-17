@@ -28,6 +28,7 @@ entrypoint = "statement.main:app"
 
 [tool.pytest.ini_options]
 log_level = "WARNING"
+filterwarnings = ["error"]
 
 [tool.mypy]
 strict = true

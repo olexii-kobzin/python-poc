@@ -28,7 +28,7 @@ from statement.conf import settings
 from statement.db import VersionedSession
 from statement.infra.auth import TokenVerifier
 from statement.main import app
-from tests.utils.auth import TEST_ISSUER, AuthHeaders, TestKeyVerifier, make_token
+from tests.utils.auth import TEST_ISSUER, AuthHeaders, TokenTestVerifier, make_token
 
 
 class RunEntrypoint(Protocol):
@@ -53,7 +53,7 @@ def rsa_private_key() -> RSAPrivateKey:
 
 @pytest.fixture(scope="session")
 def token_verifier(rsa_private_key: RSAPrivateKey) -> TokenVerifier:
-    return TestKeyVerifier(
+    return TokenTestVerifier(
         public_key=rsa_private_key.public_key(),
         trusted_issuers={TEST_ISSUER: ["statement."]},
     )

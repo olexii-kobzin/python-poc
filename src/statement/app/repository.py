@@ -1,20 +1,21 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from decimal import Decimal
+from typing import Protocol
 from uuid import UUID
 
-from statement.app.dto.main import AccountVerification
+from statement.app.dto.main import (
+    CustomerAccountLedgerDiscrepancy,
+    CustomerAccountLedgerVerified,
+    CustomerAccountVerification,
+)
 from statement.app.schemas.account import (
     CustomerAccountDisplay,
     CustomerAccountListQuery,
     CustomerAccountListQueryCursor,
 )
-from statement.infra.models import (
-    CustomerAccountLedgerDiscrepancy,
-    CustomerAccountLedgerVerified,
-)
 
 
-class CustomerAccountReadRepository(ABC):
+class CustomerAccountReadRepository(Protocol):
     @abstractmethod
     async def list_all(
         self,
@@ -23,18 +24,18 @@ class CustomerAccountReadRepository(ABC):
         pass
 
 
-class CustomerAccountLedgerVerificationRepository(ABC):
+class CustomerAccountLedgerVerificationRepository(Protocol):
     @abstractmethod
     async def next_batch(
         self,
         accounts_per_run: int,
         rows_per_account: int,
         max_checkpoint_age_seconds: int,
-    ) -> list[AccountVerification]:
+    ) -> list[CustomerAccountVerification]:
         pass
 
     @abstractmethod
-    def add_checkpoint(
+    async def add_checkpoint(
         self,
         account_id: UUID,
         through_no: int,
@@ -43,11 +44,22 @@ class CustomerAccountLedgerVerificationRepository(ABC):
         pass
 
     @abstractmethod
-    def record_verified(self, verification: AccountVerification) -> None:
+    async def record_verified(self, verification: CustomerAccountVerification) -> None:
         pass
 
     @abstractmethod
-    def record_discrepancy(self, verification: AccountVerification) -> None:
+    async def record_discrepancy(
+        self, verification: CustomerAccountVerification
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def resolve_discrepancy(
+        self,
+        discrepancy_id: int,
+        account_id: UUID,
+        resolved_by: UUID,
+    ) -> None:
         pass
 
     @abstractmethod

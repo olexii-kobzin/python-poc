@@ -19,7 +19,7 @@ class AuthHeaders(Protocol):
     ) -> dict[str, str]: ...
 
 
-class TestKeyVerifier(TokenVerifier):
+class TokenTestVerifier(TokenVerifier):
     """TokenVerifier that trusts a fixed public key instead of fetching JWKS."""
 
     def __init__(self, public_key: Any, **kwargs: Any) -> None:

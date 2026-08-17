@@ -2,10 +2,12 @@ from datetime import UTC, datetime
 from uuid import uuid7
 
 import pytest
+import sqlalchemy as sa
 from fastapi import status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from statement.app import version_token
 from statement.app.permissions import Permission
 from statement.domain.entities.account import CustomerAccount, CustomerAccountStatus
 from statement.domain.entities.customer import Customer
@@ -48,6 +50,11 @@ async def set_up_account(
     return account
 
 
+def current_version(account: CustomerAccount) -> str:
+    """The token a client would have received from a read of this account."""
+    return version_token.issue(account.id, account.version)
+
+
 @pytest.mark.anyio
 async def test_update_account_with_permission(
     client: AsyncClient,
@@ -59,7 +66,7 @@ async def test_update_account_with_permission(
 
     response = await client.patch(
         f"/v1/accounts/{account.id}",
-        json={"name": "renamed"},
+        json={"version": current_version(account), "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
@@ -86,7 +93,10 @@ async def test_update_account_deactivates(
 
     response = await client.patch(
         f"/v1/accounts/{account.id}",
-        json={"status": CustomerAccountStatus.DISABLED},
+        json={
+            "version": current_version(account),
+            "status": CustomerAccountStatus.DISABLED,
+        },
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
@@ -117,7 +127,10 @@ async def test_update_account_reactivates(
 
     response = await client.patch(
         f"/v1/accounts/{account.id}",
-        json={"status": CustomerAccountStatus.ACTIVE},
+        json={
+            "version": current_version(account),
+            "status": CustomerAccountStatus.ACTIVE,
+        },
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
@@ -149,7 +162,7 @@ async def test_update_account_without_status_leaves_it_alone(
 
     response = await client.patch(
         f"/v1/accounts/{account.id}",
-        json={"name": "renamed"},
+        json={"version": current_version(account), "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
@@ -177,7 +190,11 @@ async def test_update_account_cannot_set_deleted(
 
     response = await client.patch(
         f"/v1/accounts/{account.id}",
-        json={"name": "main", "status": CustomerAccountStatus.DELETED},
+        json={
+            "version": current_version(account),
+            "name": "main",
+            "status": CustomerAccountStatus.DELETED,
+        },
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
@@ -205,7 +222,11 @@ async def test_update_deleted_account_is_rejected(
 
     response = await client.patch(
         f"/v1/accounts/{account.id}",
-        json={"name": "renamed", "status": CustomerAccountStatus.ACTIVE},
+        json={
+            "version": current_version(account),
+            "name": "renamed",
+            "status": CustomerAccountStatus.ACTIVE,
+        },
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
@@ -228,11 +249,66 @@ async def test_update_account_not_found(
 ) -> None:
     response = await client.patch(
         f"/v1/accounts/{uuid7()}",
-        json={"name": "renamed"},
+        json={"version": version_token.issue(uuid7(), 1), "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.anyio
+async def test_update_account_with_stale_version_is_rejected(
+    client: AsyncClient,
+    session: AsyncSession,
+    auth_headers: AuthHeaders,
+) -> None:
+    """Admin A holds a token from before admin B's write."""
+    customer = await set_up_customer(session)
+    account = await set_up_account(session, customer)
+    stale = version_token.issue(account.id, account.version - 1)
+
+    response = await client.patch(
+        f"/v1/accounts/{account.id}",
+        json={"version": stale, "name": "renamed"},
+        headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert await DbTestUtil.exists(
+        session,
+        CustomerAccount.__tablename__,
+        {"id": account.id, "name": "main"},
+    )
+
+
+@pytest.mark.anyio
+async def test_update_account_loses_race_after_version_check(
+    client: AsyncClient,
+    session: AsyncSession,
+    auth_headers: AuthHeaders,
+) -> None:
+    """
+    Simulates a writer committing between the handler's read and its commit by
+    moving the row forward underneath the loaded instance
+    """
+    customer = await set_up_customer(session)
+    account = await set_up_account(session, customer)
+    token = current_version(account)
+
+    await session.execute(
+        sa.text(
+            "UPDATE customer_account SET version = version + 1 WHERE id = :id",
+        ),
+        {"id": account.id},
+    )
+
+    response = await client.patch(
+        f"/v1/accounts/{account.id}",
+        json={"version": token, "name": "renamed"},
+        headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
 
 
 @pytest.mark.anyio
@@ -245,7 +321,7 @@ async def test_update_account_without_token(
 
     response = await client.patch(
         f"/v1/accounts/{account.id}",
-        json={"name": "renamed"},
+        json={"version": current_version(account), "name": "renamed"},
     )
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -271,7 +347,7 @@ async def test_update_account_without_permission(
 
     response = await client.patch(
         f"/v1/accounts/{account.id}",
-        json={"name": "renamed"},
+        json={"version": current_version(account), "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_CREATE]),
     )
 

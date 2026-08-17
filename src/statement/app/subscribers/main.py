@@ -17,7 +17,6 @@ from statement.app.messages_base import BaseAsyncMessage
 from statement.app.subscribers import base
 from statement.domain.entities.account import LedgerOperationType
 from statement.domain.entities.customer import Customer, CustomerStatus
-from statement.domain.repository import CustomerRepository
 
 router = RabbitRouter()
 log = structlog.get_logger(__name__)
@@ -53,8 +52,8 @@ async def get_enqueuer(
 async def on_customer_created(
     event: CustomerCreated,
     session: Annotated[AsyncSession, Depends(deps.get_session)],
-    customer_repo: Annotated[CustomerRepository, Depends(deps.get_customer_repo)],
 ) -> None:
+    customer_repo = deps.get_customer_repo(session)
     customer = await customer_repo.find_by_id(event.id)
     if customer is not None:
         return None

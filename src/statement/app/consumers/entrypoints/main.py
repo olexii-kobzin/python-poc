@@ -5,6 +5,7 @@ from pgqueuer import PgQueuer, RetryRequested
 from pgqueuer.models import Context, Job
 from pydantic import ValidationError
 
+from statement import deps
 from statement.app.commands.local.main import CreatePayment
 from statement.app.consumers.executor import DlqRetryEntrypointExecutor
 from statement.app.errors.main import TerminalJobError
@@ -18,7 +19,6 @@ from statement.domain.entities.account import (
     CustomerAccountLedger,
     CustomerAccountStatus,
 )
-from statement.infra.repository.account import CustomerAccountRepositoryImpl
 
 _PAYLOAD_LOG_LIMIT = 200
 
@@ -128,7 +128,7 @@ def register_entrypoints(pgq: PgQueuer) -> None:
         event = _decode_or_fail(CreatePayment, job)
 
         async with session_scope() as session:
-            repo = CustomerAccountRepositoryImpl(session=session)
+            repo = deps.get_customer_account_repo(session)
 
             account = await repo.lock_by_id(event.account_id)
             if account is None:

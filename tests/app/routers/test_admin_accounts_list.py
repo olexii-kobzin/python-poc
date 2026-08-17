@@ -7,6 +7,7 @@ from fastapi import status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from statement.app import version_token
 from statement.app.permissions import Permission
 from statement.domain.entities.account import CustomerAccount, CustomerAccountStatus
 from statement.domain.entities.customer import Customer
@@ -112,6 +113,7 @@ async def test_list_sorts_by_created_at_desc(
         "created_at": account.created_at.isoformat(),
         "updated_at": account.updated_at.isoformat(),
         "updated_by": str(account.updated_by),
+        "version": version_token.issue(account.id, account.version),
     }
 
 

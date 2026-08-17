@@ -8,13 +8,14 @@ from pgqueuer import Queries
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from statement import deps
+from statement.app.auth import Principal
 from statement.app.repository import (
     CustomerAccountLedgerVerificationRepository,
     CustomerAccountReadRepository,
 )
 from statement.conf import AppEnv, settings
 from statement.domain.repository import CustomerAccountRepository
-from statement.infra.auth import Principal, TokenVerifier
+from statement.infra.auth import TokenVerifier
 from statement.read.repository.account import CustomerAccountReadRepositoryImpl
 
 get_session = deps.get_session
@@ -81,13 +82,13 @@ async def get_pgqueuer_queries(
 async def get_customer_account_repo(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CustomerAccountRepository:
-    return await deps.get_customer_account_repo(session)
+    return deps.get_customer_account_repo(session)
 
 
 async def get_ledger_verification_repo(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CustomerAccountLedgerVerificationRepository:
-    return await deps.get_ledger_verification_repo(session)
+    return deps.get_ledger_verification_repo(session)
 
 
 async def get_customer_account_read_repo(

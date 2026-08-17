@@ -1,17 +1,22 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 from statement.domain.entities.account import CustomerAccount, CustomerAccountLedger
 from statement.domain.entities.customer import Customer
 
 
-class CustomerRepository(ABC):
+# runtime_checkable: fast_depends builds an isinstance validator for handler
+# params annotated with this Protocol; a plain Protocol is not a valid
+# isinstance target and crashes subscriber startup
+@runtime_checkable
+class CustomerRepository(Protocol):
     @abstractmethod
     async def find_by_id(self, entity_id: UUID) -> Customer | None:
         pass
 
 
-class CustomerAccountRepository(ABC):
+class CustomerAccountRepository(Protocol):
     @abstractmethod
     async def find_by_id(self, entity_id: UUID) -> CustomerAccount | None:
         pass

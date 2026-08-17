@@ -20,7 +20,16 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from statement.app.dto.main import AccountVerification
+from statement.app.dto.main import (
+    CustomerAccountLedgerDiscrepancy as CustomerAccountLedgerDiscrepancyDto,
+)
+from statement.app.dto.main import (
+    CustomerAccountLedgerVerified as CustomerAccountLedgerVerifiedDto,
+)
+from statement.app.dto.main import (
+    CustomerAccountVerification,
+)
+from statement.app.enums.account import LedgerDiscrepancyKind
 from statement.app.repository import CustomerAccountLedgerVerificationRepository
 from statement.domain.entities.account import CustomerAccountLedger
 from statement.infra.models.account import (
@@ -147,7 +156,7 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
         accounts_per_run: int,
         rows_per_account: int,
         max_checkpoint_age_seconds: int,
-    ) -> list[AccountVerification]:
+    ) -> list[CustomerAccountVerification]:
         window_rows = rows_per_account + 1
         result = await self.session.execute(
             _BATCH_SQL,
@@ -160,11 +169,11 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
         )
 
         return [
-            AccountVerification(batch_limit=window_rows, **row)
+            CustomerAccountVerification(batch_limit=window_rows, **row)
             for row in result.mappings().all()
         ]
 
-    def add_checkpoint(
+    async def add_checkpoint(
         self,
         account_id: UUID,
         through_no: int,
@@ -179,14 +188,16 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
             )
         )
 
-    def record_verified(self, verification: AccountVerification) -> None:
-        self.add_checkpoint(
+    async def record_verified(self, verification: CustomerAccountVerification) -> None:
+        await self.add_checkpoint(
             account_id=verification.account_id,
             through_no=verification.last_good_no,
             balance=verification.last_good_balance,
         )
 
-    def record_discrepancy(self, verification: AccountVerification) -> None:
+    async def record_discrepancy(
+        self, verification: CustomerAccountVerification
+    ) -> None:
         if verification.break_no is None or verification.break_kind is None:
             raise ValueError("no break to record")
 
@@ -194,7 +205,7 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
             CustomerAccountLedgerDiscrepancy(
                 account_id=verification.account_id,
                 no=verification.break_no,
-                kind=verification.break_kind,
+                kind=LedgerDiscrepancyKind(verification.break_kind),
                 prev_no=verification.break_prev_no or 0,
                 expected_balance=verification.expected_balance,
                 actual_balance=verification.break_balance or Decimal(0),
@@ -203,22 +214,57 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
             )
         )
 
+    async def resolve_discrepancy(
+        self,
+        discrepancy_id: int,
+        account_id: UUID,
+        resolved_by: UUID,
+    ) -> None:
+        stmt = (
+            sa.select(CustomerAccountLedgerDiscrepancy)
+            .where(
+                CustomerAccountLedgerDiscrepancy.discrepancy_id == discrepancy_id,
+                CustomerAccountLedgerDiscrepancy.account_id == account_id,
+            )
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        discrepancy = result.scalar_one()
+
+        discrepancy.resolved_at = datetime.now(UTC)
+        discrepancy.resolved_by = resolved_by
+
     async def find_open_discrepancy(
         self,
         account_id: UUID,
-    ) -> CustomerAccountLedgerDiscrepancy | None:
+    ) -> CustomerAccountLedgerDiscrepancyDto | None:
         stmt = sa.select(CustomerAccountLedgerDiscrepancy).where(
             CustomerAccountLedgerDiscrepancy.account_id == account_id,
             CustomerAccountLedgerDiscrepancy.resolved_at.is_(None),
         )
         result = await self.session.execute(stmt)
 
-        return result.scalar_one_or_none()
+        discrepancy = result.scalar_one_or_none()
+        if discrepancy is None:
+            return None
+
+        return CustomerAccountLedgerDiscrepancyDto(
+            discrepancy_id=discrepancy.discrepancy_id,
+            account_id=discrepancy.account_id,
+            no=discrepancy.no,
+            kind=discrepancy.kind.value,
+            prev_no=discrepancy.prev_no,
+            expected_balance=discrepancy.expected_balance,
+            actual_balance=discrepancy.actual_balance,
+            detected_at=discrepancy.detected_at,
+            resolved_at=discrepancy.resolved_at,
+            resolved_by=discrepancy.resolved_by,
+        )
 
     async def find_latest_checkpoint(
         self,
         account_id: UUID,
-    ) -> CustomerAccountLedgerVerified | None:
+    ) -> CustomerAccountLedgerVerifiedDto | None:
         stmt = (
             sa.select(CustomerAccountLedgerVerified)
             .where(CustomerAccountLedgerVerified.account_id == account_id)
@@ -227,7 +273,16 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
         )
         result = await self.session.execute(stmt)
 
-        return result.scalar_one_or_none()
+        checkpoint = result.scalar_one_or_none()
+        if checkpoint is None:
+            return None
+
+        return CustomerAccountLedgerVerifiedDto(
+            account_id=checkpoint.account_id,
+            through_no=checkpoint.through_no,
+            balance=checkpoint.balance,
+            verified_at=checkpoint.verified_at,
+        )
 
     async def find_ledger_balance(
         self,

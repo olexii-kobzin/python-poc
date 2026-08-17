@@ -1,26 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
-from enum import StrEnum
 from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy import Identity, Index, PrimaryKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from statement.app.enums.account import LedgerDiscrepancyKind
 from statement.domain.entities import Base
-
-
-class LedgerDiscrepancyKind(StrEnum):
-    # an already-verified row's balance changed since it was checkpointed
-    ANCHOR_BALANCE = "anchor_balance"
-    # no <> prev_no + 1, but the running total still adds up: the numbering has
-    # a hole and no amounts went missing with it
-    GAP = "gap"
-    # balance <> prev_balance + amount -- the running total broke
-    BALANCE = "balance"
-    # both at once: rows are missing *and* they took their amounts with them.
-    # expected_balance - actual_balance is what the missing rows summed to
-    GAP_BALANCE = "gap_balance"
 
 
 class CustomerAccountLedgerVerified(Base):

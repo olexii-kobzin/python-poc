@@ -4,10 +4,8 @@ import structlog
 from pgqueuer import PgQueuer
 from pgqueuer.models import Schedule, ScheduleContext
 
+from statement import deps
 from statement.conf import settings
-from statement.infra.repository.ledger_verification import (
-    CustomerAccountLedgerVerificationRepositoryImpl,
-)
 
 log = structlog.get_logger(__name__)
 
@@ -29,7 +27,7 @@ def register_jobs(pgq: PgQueuer) -> None:
         session_scope = ctx.resources["session_scope"]
 
         async with session_scope() as session:
-            repo = CustomerAccountLedgerVerificationRepositoryImpl(session=session)
+            repo = deps.get_ledger_verification_repo(session)
 
             batch = await repo.next_batch(
                 accounts_per_run=settings.ledger_verify_accounts_per_run,
@@ -56,11 +54,11 @@ def register_jobs(pgq: PgQueuer) -> None:
                             "verified_through_no": verification.anchor_no,
                         },
                     )
-                    repo.record_discrepancy(verification)
+                    await repo.record_discrepancy(verification)
 
                 if verification.should_checkpoint:
                     checkpoints += 1
-                    repo.record_verified(verification)
+                    await repo.record_verified(verification)
 
             await session.commit()
 

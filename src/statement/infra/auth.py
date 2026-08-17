@@ -1,21 +1,13 @@
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
 import jwt
 from jwt import InvalidIssuerError, InvalidTokenError, PyJWKClient
 
+from statement.app.auth import Principal
+
 ALGORITHMS = ["RS256"]
-
-
-@dataclass(frozen=True, slots=True)
-class Principal:
-    sub: UUID
-    scopes: frozenset[str]
-
-    def has_scope(self, scope: str) -> bool:
-        return scope in self.scopes
 
 
 class TokenVerifier:

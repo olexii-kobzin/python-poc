@@ -6,6 +6,7 @@ from fastapi import status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from statement.app import version_token
 from statement.app.permissions import Permission
 from statement.domain.entities.account import CustomerAccount, CustomerAccountStatus
 from statement.domain.entities.customer import Customer
@@ -38,6 +39,11 @@ async def add_account(session: AsyncSession) -> CustomerAccount:
     return account
 
 
+def current_version(account: CustomerAccount) -> str:
+    """The token a client would have received from a read of this account."""
+    return version_token.issue(account.id, account.version)
+
+
 @pytest.mark.anyio
 async def test_delete_flips_status_to_deleted(
     client: AsyncClient,
@@ -48,7 +54,7 @@ async def test_delete_flips_status_to_deleted(
 
     sub = uuid7()
     response = await client.delete(
-        f"/v1/accounts/{account.id}",
+        f"/v1/accounts/{account.id}?version={current_version(account)}",
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_DELETE], str(sub)),
     )
 
@@ -71,7 +77,7 @@ async def test_delete_unknown_account(
     auth_headers: AuthHeaders,
 ) -> None:
     response = await client.delete(
-        f"/accounts/{uuid7()}",
+        f"/v1/accounts/{uuid7()}?version={version_token.issue(uuid7(), 1)}",
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_DELETE]),
     )
 
@@ -85,7 +91,9 @@ async def test_delete_without_token(
 ) -> None:
     account = await add_account(session)
 
-    response = await client.delete(f"/v1/accounts/{account.id}")
+    response = await client.delete(
+        f"/v1/accounts/{account.id}?version={current_version(account)}",
+    )
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert await DbTestUtil.exists(
@@ -104,11 +112,34 @@ async def test_delete_without_permission(
     account = await add_account(session)
 
     response = await client.delete(
-        f"/v1/accounts/{account.id}",
+        f"/v1/accounts/{account.id}?version={current_version(account)}",
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert await DbTestUtil.exists(
+        session,
+        CustomerAccount.__tablename__,
+        {"id": account.id, "status": CustomerAccountStatus.ACTIVE},
+    )
+
+
+@pytest.mark.anyio
+async def test_delete_with_stale_version_is_rejected(
+    client: AsyncClient,
+    session: AsyncSession,
+    auth_headers: AuthHeaders,
+) -> None:
+    """A client holding a token from before someone else's write cannot delete."""
+    account = await add_account(session)
+    stale = version_token.issue(account.id, account.version - 1)
+
+    response = await client.delete(
+        f"/v1/accounts/{account.id}?version={stale}",
+        headers=auth_headers([Permission.ADMIN_ACCOUNTS_DELETE]),
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
     assert await DbTestUtil.exists(
         session,
         CustomerAccount.__tablename__,

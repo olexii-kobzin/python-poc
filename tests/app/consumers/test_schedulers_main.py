@@ -7,13 +7,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.testing import capture_logs
 
+from statement.app.enums.account import LedgerDiscrepancyKind
 from statement.conf import settings
 from statement.domain.entities.account import CustomerAccount, CustomerAccountLedger
 from statement.domain.entities.customer import Customer
 from statement.infra.models.account import (
     CustomerAccountLedgerDiscrepancy,
     CustomerAccountLedgerVerified,
-    LedgerDiscrepancyKind,
 )
 from tests.utils.db import DbTestUtil
 

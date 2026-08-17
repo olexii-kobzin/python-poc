@@ -1,7 +1,7 @@
 """Versioned mixin class and other utilities."""
 
 import datetime
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from sqlalchemy import (
     Column,
@@ -198,6 +198,16 @@ class VersionedHistory:
 
     __history_mapper__: ClassVar[Mapper[Any]]
     """mapper of the generated <name>History class; set by _history_mapper()"""
+
+    if TYPE_CHECKING:
+        version: int
+        """Declared for typing only.
+
+        The real Column and mapped property are added by _history_mapper() at
+        configure time. Declaring it as a mapped_column on the entity would put
+        a "version" column into the table copied for history, which then
+        collides with the history PK column appended there.
+        """
 
     def __init_subclass__(cls) -> None:
         insp = inspect(cls, raiseerr=False)

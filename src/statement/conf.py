@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     jwt_audience: str | None = None
     # local-only: fixed RSA private key (PEM) for minting/verifying dev tokens
     jwt_local_private_key: str | None = None
+    version_token_secret: str
     log_level: str
     ledger_verify_accounts_per_run: int = 100
     ledger_verify_rows_per_account: int = 1000

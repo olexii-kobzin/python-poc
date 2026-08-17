@@ -12,7 +12,7 @@ from jwt import (
 )
 
 from statement.infra.auth import TokenVerifier
-from tests.utils.auth import TEST_ISSUER, TestKeyVerifier, make_token
+from tests.utils.auth import TEST_ISSUER, TokenTestVerifier, make_token
 
 
 def test_valid_token(
@@ -85,7 +85,7 @@ def test_non_uuid_sub(
 
 
 def test_audience_mismatch(rsa_private_key: RSAPrivateKey) -> None:
-    verifier = TestKeyVerifier(
+    verifier = TokenTestVerifier(
         public_key=rsa_private_key.public_key(),
         trusted_issuers={TEST_ISSUER: ["statement."]},
         audience="statement-api",

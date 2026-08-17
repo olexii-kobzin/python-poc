@@ -1,14 +1,13 @@
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from statement.infra.models import LedgerDiscrepancyKind
+from statement.app.enums.account import LedgerDiscrepancyKind
 
 
 @dataclass(frozen=True, slots=True)
-class AccountVerification:
-    """One account's verdict for one batch."""
-
+class CustomerAccountVerification:
     account_id: UUID
     anchor_no: int
     anchor_balance: Decimal
@@ -48,3 +47,25 @@ class AccountVerification:
         return (self.break_prev_balance or Decimal(0)) + (
             self.break_amount or Decimal(0)
         )
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerAccountLedgerVerified:
+    account_id: UUID
+    through_no: int
+    balance: Decimal
+    verified_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerAccountLedgerDiscrepancy:
+    discrepancy_id: int
+    account_id: UUID
+    no: int
+    kind: str
+    prev_no: int
+    expected_balance: Decimal | None
+    actual_balance: Decimal
+    detected_at: datetime
+    resolved_at: datetime | None
+    resolved_by: UUID | None
