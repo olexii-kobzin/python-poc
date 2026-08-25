@@ -17,7 +17,6 @@ commands_exchange = RabbitExchange(
     Exchanges.COMMANDS,
     type=ExchangeType.DIRECT,
     durable=True,
-    arguments={"x-dead-letter-exchange": "dlx"},
 )
 commands_dlx = RabbitExchange(
     Exchanges.COMMANDS_DLX,
@@ -29,7 +28,6 @@ events_exchange = RabbitExchange(
     Exchanges.EVENTS,
     type=ExchangeType.TOPIC,
     durable=True,
-    arguments={"x-dead-letter-exchange": "dlx"},
 )
 events_dlx = RabbitExchange(
     Exchanges.EVENTS_DLX,

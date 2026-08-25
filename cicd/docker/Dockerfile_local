@@ -12,6 +12,7 @@ RUN groupadd -g 1000 appgroup && \
     install -d -o appuser -g appgroup /app /cache/uv
 
 WORKDIR /app
+
 USER appuser
 
 RUN --mount=type=cache,target=/cache/uv,uid=1000,gid=1000 \
@@ -25,5 +26,3 @@ RUN --mount=type=cache,target=/cache/uv,uid=1000,gid=1000 \
     uv sync --locked
 
 EXPOSE 8000
-
-ENTRYPOINT []

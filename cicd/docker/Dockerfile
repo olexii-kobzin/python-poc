@@ -41,5 +41,3 @@ COPY --chown=appuser:appgroup alembic.ini ./alembic.ini
 COPY --chown=appuser:appgroup migrations ./migrations
 
 USER appuser
-
-ENTRYPOINT []
