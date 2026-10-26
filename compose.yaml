@@ -15,7 +15,7 @@ x-volumes: &volumes
 x-app: &app
   build:
     context: .
-    dockerfile: cicd/docker/Dockerfile_local
+    dockerfile: cicd/docker/local.Dockerfile
   image: statement-local:latest
   environment:
     PYTHONDONTWRITEBYTECODE: "1"
@@ -63,7 +63,7 @@ services:
   tests:
     build:
       context: .
-      dockerfile: cicd/docker/Dockerfile_local
+      dockerfile: cicd/docker/local.Dockerfile
     image: statement-local:latest
     env_file: .env.test
     environment:

@@ -26,5 +26,4 @@ class Settings(BaseSettings):
     ledger_verify_rows_per_account: int = 1000
     ledger_verify_max_checkpoint_age_seconds: int = 3600
 
-
 settings = Settings()
