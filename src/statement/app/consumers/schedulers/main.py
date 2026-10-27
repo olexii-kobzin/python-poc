@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import structlog
 from pgqueuer import PgQueuer
 from pgqueuer.models import Schedule, ScheduleContext
+from sqlalchemy import func, select
 
 from statement import deps
 from statement.conf import settings
@@ -26,7 +27,17 @@ def register_jobs(pgq: PgQueuer) -> None:
     ) -> None:
         session_scope = ctx.resources["session_scope"]
 
-        async with session_scope() as session:
+        async with session_scope() as session, session.begin():
+            lock: bool = await session.scalar(
+                select(
+                    func.pg_try_advisory_xact_lock(
+                        func.hashtextextended(f"pgq_schedule_{schedule.id}", 0)
+                    )
+                )
+            )
+            if not lock:
+                return
+
             repo = deps.get_ledger_verification_repo(session)
 
             batch = await repo.next_batch(
@@ -59,8 +70,6 @@ def register_jobs(pgq: PgQueuer) -> None:
                 if verification.should_checkpoint:
                     checkpoints += 1
                     await repo.record_verified(verification)
-
-            await session.commit()
 
         log.info(
             "customer_account_ledger.verified",

@@ -64,7 +64,7 @@ class CustomerAccount(Base, VersionedHistory):
     )
     updated_by: Mapped[UUID] = mapped_column(sa.Uuid())
 
-    customer: Mapped[Customer] = relationship(back_populates="accounts")
+    customer: Mapped[Customer] = relationship(back_populates="accounts", lazy="raise")
 
     __table_args__ = (
         UniqueConstraint(
@@ -140,7 +140,7 @@ class CustomerAccountLedger(Base):
     # NULL = written by the system (e.g. payment consumers), not a human actor
     created_by: Mapped[UUID | None] = mapped_column(sa.Uuid(), nullable=True)
 
-    customer_account: Mapped[CustomerAccount] = relationship()
+    customer_account: Mapped[CustomerAccount] = relationship(lazy="raise")
 
     @classmethod
     def create(cls, entity_id: UUID, created_by: UUID | None) -> Self:

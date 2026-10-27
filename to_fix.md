@@ -12,7 +12,9 @@ Legend:
 
 ## 1. Do now (small, but security)
 
-- [ ] **MUST** `.env` and `.env.test` are saved in git.
+- [x] **MUST** `.env` and `.env.test` are saved in git.
+  Done: ignored, removed from the index, `.env.example` added. Old commits
+  left as is on purpose (test project, secrets are throwaway).
   They contain an RSA private key (`JWT_LOCAL_PRIVATE_KEY`), an HMAC secret
   (`VERSION_TOKEN_SECRET`), a database password, and connection strings with
   passwords inside. They are in two commits: `a44a7f6` and `4220f7e`.
@@ -23,7 +25,7 @@ Legend:
   - `git rm --cached` does not delete them from old commits. If this repo will
     ever be public, rewrite the history too.
 
-- [ ] **SHOULD** Refuse to start if `JWT_LOCAL_PRIVATE_KEY` is set and
+- [x] **SHOULD** Refuse to start if `JWT_LOCAL_PRIVATE_KEY` is set and
   `APP_ENV` is not `local`.
   Right now only `APP_ENV == LOCAL` stops the app from signing its own admin
   tokens (`fast_deps.py:29`). One wrong environment variable turns the API into
@@ -33,52 +35,78 @@ Legend:
 
 ## 2. Before GitHub Actions
 
-- [ ] **MUST** Tests cannot create their own database.
+- [x] **MUST** Tests cannot create their own database.
   `compose.yaml` uses an external network `backend` and has no `postgresql`
   service. No fixture runs the migrations — `alembic upgrade head` only exists
   as a comment (`compose.yaml:56`). This works on your machine because the
   containers already exist. In a CI runner there is nothing there, so the whole
   suite fails.
-  Pick one:
-  - add a `services: postgres:` block to the GitHub Actions job and run alembic
-    as a step, or
-  - use `testcontainers` in `tests/conftest.py` so the suite starts its own
-    database.
+  Decided: local keeps the external `backend` network. CI gets its own
+  `services: postgres:` block in the GitHub Actions job (not `compose.yaml`)
+  and runs `alembic upgrade head` as a step before `pytest`. Nothing to change
+  in code until the workflow is written.
 
-- [ ] **MUST** `anyio` and `cryptography` are imported by tests but are not
+- [x] **MUST** `anyio` and `cryptography` are imported by tests but are not
   listed as dependencies (`tests/conftest.py:8`, `:10`).
   They work now only because other packages pull them in. Add both to
   `[dependency-groups].dev` in `pyproject.toml`.
+  Done: both are in `dev` and `uv.lock` is updated.
 
-- [ ] **SHOULD** The production image cannot run by itself.
+- [x] **SHOULD** The production image cannot run by itself.
   `cicd/docker/Dockerfile:45` is `ENTRYPOINT []` and there is no `CMD`.
   Either add a `CMD`, or accept it and always set `command:` in the k8s
   manifest. Just decide on purpose.
+  Decided: `ENTRYPOINT []` is gone; the prod stage deliberately has no `CMD`
+  (the `CMD ["pytest"]` at line 26 is the test stage). One image serves api,
+  consumers and subscribers, so the command is always set at deploy time.
 
-- [ ] **NICE** No coverage tool at all. Add `pytest-cov` when you want a number.
+- [x] **NICE** No coverage tool at all. Add `pytest-cov` when you want a number.
+  Done: `pytest-cov` in `dev`, `[tool.coverage.*]` in `pyproject.toml`. Not in
+  `addopts`, so plain `pytest` stays fast; run `pytest --cov`.
 
 ---
 
 ## 3. Before Kubernetes
 
-- [ ] **MUST** No health endpoints.
+- [x] **MUST** No health endpoints.
+  Done: API and workers. `/livez` (no dependencies) and `/readyz` (`SELECT 1`, 503
+  on any error) added in `routers/system/health.py`; the api healthcheck in
+  `compose.yaml` uses `/readyz`. The API has no AMQP connection (events go
+  through the pgqueuer table), so `/readyz` is Postgres-only on purpose.
+  Workers: `infra/heartbeat.py` checks SQL (`SELECT 1`) and AMQP
+  (`broker.ping`) every 10 s and touches `/tmp/{consumers,subscribers}.alive`;
+  the compose healthcheck fails if the file is older than 30 s. Tests in
+  `tests/app/routers/test_health.py` and `tests/infra/test_heartbeat.py`.
+  For k8s use the same file check as an exec probe.
   There is no `/health`, `/livez` or `/readyz`. `compose.yaml` checks
   `/openapi.json`, which returns 200 even when Postgres is down.
   The `consumers` and `subscribers` processes have no health signal at all, so
   a stuck worker looks fine forever. k8s needs real probes.
 
-- [ ] **SHOULD** Graceful shutdown is incomplete.
+- [x] **SHOULD** Graceful shutdown is incomplete.
+  Done: `graceful_timeout=settings.amqp_graceful_timeout` in `build_broker()`;
+  all three processes call `sa_engine.dispose()`.
   - `RabbitBroker` is built with no `graceful_timeout`
     (`app/subscribers/base.py:40`), so running handlers get cut off instead of
     finishing.
   - Only the API disposes the database engine (`main.py:16-22`). The consumer
     and subscriber processes create an engine and never dispose it.
 
-- [ ] **SHOULD** Decide how migrations run.
+- [x] **SHOULD** Decide how migrations run.
+  Decided: manual (`alembic upgrade head`), not on pod start. The database is
+  shared between microservices, so no single service's deploy should migrate it
+  automatically. Keep migrations backward compatible, because old pods keep
+  running against the new schema.
   Today it is a manual command. In k8s it should be a Job or an init container
   that runs before the app pods start.
 
-- [ ] **NICE** Nothing propagates a request id between the three processes.
+- [x] **NICE** Nothing propagates a request id between the three processes.
+  Done: the id is a UUID (`infra/request_id.py`; anything else is replaced by a
+  new uuid7). The API middleware returns it as `x-request-id`; it travels in
+  pgqueuer job `headers` (API and subscribers enqueue), in RabbitMQ message
+  headers (consumers publish), and is bound to the log context by the job
+  executor and by a router dependency on the subscribers. Scheduled jobs have no
+  incoming id, so they get a fresh one per run.
   `main.py:34` binds `x-request-id`, but binds `None` when the header is
   missing, never sends it back in the response, and never puts it into the
   RabbitMQ message or the pgqueuer job. So you cannot follow one request

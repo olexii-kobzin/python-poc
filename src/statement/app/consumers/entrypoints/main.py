@@ -19,6 +19,7 @@ from statement.domain.entities.account import (
     CustomerAccountLedger,
     CustomerAccountStatus,
 )
+from statement.infra.request_id import propagation_headers
 
 _PAYLOAD_LOG_LIMIT = 200
 
@@ -107,6 +108,7 @@ def register_entrypoints(pgq: PgQueuer) -> None:
             exchange=events_exchange,
             content_encoding="utf-8",
             content_type="application/json",
+            headers=propagation_headers(),
         )
 
         return None
@@ -127,7 +129,7 @@ def register_entrypoints(pgq: PgQueuer) -> None:
         session_scope = ctx.resources["session_scope"]
         event = _decode_or_fail(CreatePayment, job)
 
-        async with session_scope() as session:
+        async with session_scope() as session, session.begin():
             repo = deps.get_customer_account_repo(session)
 
             account = await repo.lock_by_id(event.account_id)
@@ -201,6 +203,5 @@ def register_entrypoints(pgq: PgQueuer) -> None:
                 created_by=None,
             )
             session.add(entry)
-            await session.commit()
 
         return None

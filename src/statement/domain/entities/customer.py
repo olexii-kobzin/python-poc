@@ -40,7 +40,10 @@ class Customer(Base):
         nullable=True,
     )
 
-    accounts: Mapped[list[CustomerAccount]] = relationship(back_populates="customer")
+    accounts: Mapped[list[CustomerAccount]] = relationship(
+        back_populates="customer",
+        lazy="raise",
+    )
 
     @classmethod
     def create(

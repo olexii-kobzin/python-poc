@@ -1,5 +1,6 @@
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid7
 
 import anyio
 import pytest
@@ -7,9 +8,11 @@ from pgqueuer import RetryRequested
 from pgqueuer.executors import EntrypointExecutorParameters
 from pgqueuer.models import Context, Job
 from pgqueuer.types import JobId
+from structlog.contextvars import get_contextvars
 
 from statement.app.consumers.executor import DlqRetryEntrypointExecutor
 from statement.app.errors.main import LastAttemptError
+from statement.infra.request_id import REQUEST_ID_HEADER
 
 MAX_ATTEMPTS = 3
 
@@ -104,3 +107,41 @@ async def test_exhausted_budget_fires_the_hook_and_goes_terminal() -> None:
         )
 
     assert [str(err) for err in calls] == ["permanent"]
+
+
+@pytest.mark.anyio
+async def test_job_runs_with_the_request_id_from_its_headers() -> None:
+    seen: list[object] = []
+    request_id = str(uuid7())
+
+    async def handler(job: Job) -> None:
+        seen.append(get_contextvars().get("request_id"))
+
+    executor = build_executor(handler, [])
+    job = make_job(attempts=0).model_copy(
+        update={"headers": {REQUEST_ID_HEADER: request_id}}
+    )
+
+    await executor.execute(job, Context(cancellation=anyio.CancelScope(), resources={}))
+
+    assert seen == [request_id]
+    assert "request_id" not in get_contextvars(), "binding must not leak"
+
+
+@pytest.mark.anyio
+async def test_job_without_headers_gets_a_generated_request_id() -> None:
+    seen: list[object] = []
+
+    async def handler(job: Job) -> None:
+        seen.append(get_contextvars().get("request_id"))
+
+    executor = build_executor(handler, [])
+
+    await executor.execute(
+        make_job(attempts=0),
+        Context(cancellation=anyio.CancelScope(), resources={}),
+    )
+
+    (generated,) = seen
+    assert isinstance(generated, str)
+    assert str(UUID(generated)) == generated

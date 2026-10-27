@@ -18,6 +18,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from statement.app.dto.main import (
@@ -179,13 +180,15 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
         through_no: int,
         balance: Decimal,
     ) -> None:
-        self.session.add(
-            CustomerAccountLedgerVerified(
+        await self.session.execute(
+            insert(CustomerAccountLedgerVerified)
+            .values(
                 account_id=account_id,
                 through_no=through_no,
                 balance=balance,
                 verified_at=datetime.now(UTC),
             )
+            .on_conflict_do_nothing(index_elements=["account_id", "through_no"])
         )
 
     async def record_verified(self, verification: CustomerAccountVerification) -> None:
@@ -201,8 +204,9 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
         if verification.break_no is None or verification.break_kind is None:
             raise ValueError("no break to record")
 
-        self.session.add(
-            CustomerAccountLedgerDiscrepancy(
+        await self.session.execute(
+            insert(CustomerAccountLedgerDiscrepancy)
+            .values(
                 account_id=verification.account_id,
                 no=verification.break_no,
                 kind=LedgerDiscrepancyKind(verification.break_kind),
@@ -212,6 +216,7 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
                 resolved_at=None,
                 detected_at=datetime.now(UTC),
             )
+            .on_conflict_do_nothing(index_elements=["account_id"])
         )
 
     async def resolve_discrepancy(

@@ -40,6 +40,7 @@ from statement.domain.entities.account import (
     CustomerAccountStatus,
 )
 from statement.domain.repository import CustomerAccountRepository
+from statement.infra.request_id import propagation_headers
 
 router = APIRouter(prefix="/v1")
 log = structlog.get_logger(__name__)
@@ -48,7 +49,7 @@ log = structlog.get_logger(__name__)
 @router.post("/accounts", status_code=status.HTTP_201_CREATED)
 async def create_customer_account(
     account_create: Annotated[CustomerAccountCreate, Body()],
-    session: Annotated[AsyncSession, Depends(fast_deps.get_session)],
+    session: Annotated[AsyncSession, Depends(fast_deps.get_tx_session)],
     queries: Annotated[Queries, Depends(fast_deps.get_pgqueuer_queries)],
     principal: Annotated[
         Principal,
@@ -85,16 +86,15 @@ async def create_customer_account(
         entrypoint=event.route(),
         payload=event.to_payload_bytes(),
         dedupe_key=event.dedupe_key(),
+        headers=propagation_headers(),
     )
-
-    await session.commit()
 
 
 @router.patch("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def updated_customer_account(
     account_id: Annotated[UUID, Path()],
     account_update: Annotated[CustomerAccountUpdate, Body()],
-    session: Annotated[AsyncSession, Depends(fast_deps.get_session)],
+    session: Annotated[AsyncSession, Depends(fast_deps.get_tx_session)],
     repo: Annotated[
         CustomerAccountRepository,
         Depends(fast_deps.get_customer_account_repo),
@@ -122,8 +122,7 @@ async def updated_customer_account(
     if account_update.status is not None:
         account.status = account_update.status
     account.updated_by = principal.sub
-
-    await session.commit()
+    session.add(account)
 
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -136,7 +135,7 @@ async def delete_customer_account(
             max_length=version_token.TOKEN_LENGTH,
         ),
     ],
-    session: Annotated[AsyncSession, Depends(fast_deps.get_session)],
+    session: Annotated[AsyncSession, Depends(fast_deps.get_tx_session)],
     repo: Annotated[
         CustomerAccountRepository,
         Depends(fast_deps.get_customer_account_repo),
@@ -161,8 +160,7 @@ async def delete_customer_account(
 
     account.status = CustomerAccountStatus.DELETED
     account.updated_by = principal.sub
-
-    await session.commit()
+    session.add(account)
 
 
 @router.get("/accounts")
@@ -230,7 +228,7 @@ async def get_customer_account_ledger_discrepancy(
 async def resolve_customer_account_ledger_discrepancy(
     id: Annotated[UUID, Path()],
     resolution: Annotated[LedgerDiscrepancyResolve, Body()],
-    session: Annotated[AsyncSession, Depends(fast_deps.get_session)],
+    session: Annotated[AsyncSession, Depends(fast_deps.get_tx_session)],
     repo: Annotated[
         CustomerAccountLedgerVerificationRepository,
         Depends(fast_deps.get_ledger_verification_repo),
@@ -297,7 +295,6 @@ async def resolve_customer_account_ledger_discrepancy(
         resolved_by=principal.sub,
     )
 
-    await session.commit()
     log.warning(
         "customer_account_ledger.discrepancy.resolved",
         details={

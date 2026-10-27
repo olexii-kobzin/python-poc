@@ -37,7 +37,10 @@ events_dlx = RabbitExchange(
 
 
 def build_broker() -> RabbitBroker:
-    return RabbitBroker(settings.amqp_dsn)
+    return RabbitBroker(
+        settings.amqp_dsn,
+        graceful_timeout=settings.amqp_graceful_timeout,
+    )
 
 
 def live_queue(name: str, routing_key: str, dlx: str) -> RabbitQueue:

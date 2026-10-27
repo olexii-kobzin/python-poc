@@ -19,6 +19,7 @@ from statement.infra.auth import TokenVerifier
 from statement.read.repository.account import CustomerAccountReadRepositoryImpl
 
 get_session = deps.get_session
+get_tx_session = deps.get_tx_session
 
 bearer_scheme = HTTPBearer(auto_error=False)
 

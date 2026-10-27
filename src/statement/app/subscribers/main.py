@@ -1,10 +1,12 @@
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 import structlog
 from faststream import Depends
-from faststream.rabbit import RabbitRouter
+from faststream.rabbit import RabbitMessage, RabbitRouter
 from pgqueuer import Queries
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog.contextvars import bound_contextvars
 
 from statement import deps
 from statement.app.commands.local.main import CreatePayment
@@ -17,8 +19,15 @@ from statement.app.messages_base import BaseAsyncMessage
 from statement.app.subscribers import base
 from statement.domain.entities.account import LedgerOperationType
 from statement.domain.entities.customer import Customer, CustomerStatus
+from statement.infra.request_id import propagation_headers, request_id_from
 
-router = RabbitRouter()
+
+async def bind_request_id(message: RabbitMessage) -> AsyncIterator[None]:
+    with bound_contextvars(request_id=request_id_from(message.headers)):
+        yield
+
+
+router = RabbitRouter(dependencies=[Depends(bind_request_id)])
 log = structlog.get_logger(__name__)
 
 
@@ -31,6 +40,7 @@ class JobEnqueuer:
             entrypoint=event.route(),
             payload=event.to_payload_bytes(),
             dedupe_key=event.dedupe_key(),
+            headers=propagation_headers(),
         )
 
 
@@ -51,7 +61,7 @@ async def get_enqueuer(
 )
 async def on_customer_created(
     event: CustomerCreated,
-    session: Annotated[AsyncSession, Depends(deps.get_session)],
+    session: Annotated[AsyncSession, Depends(deps.get_tx_session)],
 ) -> None:
     customer_repo = deps.get_customer_repo(session)
     customer = await customer_repo.find_by_id(event.id)
@@ -67,7 +77,6 @@ async def on_customer_created(
         updated_at=event.updated_at,
     )
     session.add(customer)
-    await session.commit()
 
 
 @router.subscriber(
@@ -80,7 +89,7 @@ async def on_customer_created(
 )
 async def on_payment_deposited(
     event: PaymentDeposited,
-    session: Annotated[AsyncSession, Depends(deps.get_session)],
+    session: Annotated[AsyncSession, Depends(deps.get_tx_session)],
     enqueuer: Annotated[JobEnqueuer, Depends(get_enqueuer)],
 ) -> None:
     await enqueuer.enqueue(
@@ -92,7 +101,6 @@ async def on_payment_deposited(
             occurred_at=event.occurred_at,
         )
     )
-    await session.commit()
 
 
 @router.subscriber(
@@ -105,7 +113,7 @@ async def on_payment_deposited(
 )
 async def on_payment_withdrawn(
     event: PaymentWithdrawn,
-    session: Annotated[AsyncSession, Depends(deps.get_session)],
+    session: Annotated[AsyncSession, Depends(deps.get_tx_session)],
     enqueuer: Annotated[JobEnqueuer, Depends(get_enqueuer)],
 ) -> None:
     await enqueuer.enqueue(
@@ -117,4 +125,3 @@ async def on_payment_withdrawn(
             occurred_at=event.occurred_at,
         )
     )
-    await session.commit()

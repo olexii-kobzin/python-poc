@@ -24,6 +24,11 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
+async def get_tx_session() -> AsyncIterator[AsyncSession]:
+    async with Session() as session, session.begin():
+        yield session
+
+
 async def make_queries(connection: AsyncConnection) -> Queries:
     raw_connection = await connection.get_raw_connection()
     apg_connection = raw_connection.driver_connection

@@ -1,5 +1,7 @@
 from enum import StrEnum
+from typing import Self
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -25,5 +27,16 @@ class Settings(BaseSettings):
     ledger_verify_accounts_per_run: int = 100
     ledger_verify_rows_per_account: int = 1000
     ledger_verify_max_checkpoint_age_seconds: int = 3600
+    amqp_graceful_timeout: int = 10
+
+    @model_validator(mode="after")
+    def _local_key_only_in_local(self) -> Self:
+        if self.jwt_local_private_key and self.app_env != AppEnv.LOCAL:
+            raise ValueError(
+                "jwt_local_private_key is only allowed in local environment"
+            )
+
+        return self
+
 
 settings = Settings()

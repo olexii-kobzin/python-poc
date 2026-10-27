@@ -5,8 +5,10 @@ from typing import NoReturn
 
 from pgqueuer import errors, models
 from pgqueuer.core.executors import EntrypointExecutor
+from structlog.contextvars import bound_contextvars
 
 from statement.app.errors.main import LastAttemptError, TerminalJobError
+from statement.infra.request_id import request_id_from
 
 OnLastAttempt = Callable[[models.Job, models.Context, Exception], Awaitable[None]]
 
@@ -20,18 +22,19 @@ class DlqRetryEntrypointExecutor(EntrypointExecutor):
     on_last_attempt: OnLastAttempt | None = None
 
     async def execute(self, job: models.Job, context: models.Context) -> None:
-        try:
-            await super().execute(job, context)
-        except TerminalJobError as e:
-            await self._fail(job, context, e)
-        except Exception as e:
-            if job.attempts >= self.max_attempts:
+        with bound_contextvars(request_id=request_id_from(job.headers)):
+            try:
+                await super().execute(job, context)
+            except TerminalJobError as e:
                 await self._fail(job, context, e)
-            delay = min(
-                self.initial_delay * (self.backoff_multiplier**job.attempts),
-                self.max_delay,
-            )
-            raise errors.RetryRequested(delay=delay, reason=str(e)) from e
+            except Exception as e:
+                if job.attempts >= self.max_attempts:
+                    await self._fail(job, context, e)
+                delay = min(
+                    self.initial_delay * (self.backoff_multiplier**job.attempts),
+                    self.max_delay,
+                )
+                raise errors.RetryRequested(delay=delay, reason=str(e)) from e
 
     async def _fail(
         self,

@@ -7,8 +7,10 @@ from sqlalchemy.orm.exc import StaleDataError
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from statement.app.routers.admin import account
+from statement.app.routers.system import health
 from statement.db import sa_engine
 from statement.infra.observability import setup_logging
+from statement.infra.request_id import REQUEST_ID_HEADER, resolve_request_id
 
 setup_logging("statement-api")
 
@@ -31,8 +33,15 @@ async def logging_ctx(
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
     clear_contextvars()
-    bind_contextvars(request_id=request.headers.get("x-request-id"))
-    return await call_next(request)
+
+    request_id = resolve_request_id(request.headers.get(REQUEST_ID_HEADER))
+
+    bind_contextvars(request_id=request_id)
+
+    response = await call_next(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+
+    return response
 
 
 @app.exception_handler(StaleDataError)
@@ -44,3 +53,4 @@ async def stale_data_conflict(request: Request, exc: StaleDataError) -> JSONResp
 
 
 app.include_router(account.router)
+app.include_router(health.router)
