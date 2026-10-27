@@ -64,7 +64,7 @@ def register_entrypoints(pgq: PgQueuer) -> None:
         err: Exception,
     ) -> None:
         log.error(
-            f"Consumer job {job.entrypoint} exhausted",
+            f"Consumer job {job.entrypoint} exhausted or terminated",
             details={
                 "entrypoint": job.entrypoint,
                 "job_id": int(job.id),
@@ -203,5 +203,6 @@ def register_entrypoints(pgq: PgQueuer) -> None:
                 created_by=None,
             )
             session.add(entry)
+            await session.flush()
 
         return None

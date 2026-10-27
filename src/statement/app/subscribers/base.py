@@ -13,6 +13,11 @@ class Exchanges(StrEnum):
     EVENTS_DLX = "events.dlx"
 
 
+class Queues(StrEnum):
+    COMMANDS_DLQ = "commands.dlq"
+    EVENTS_DLQ = "events.dlq"
+
+
 commands_exchange = RabbitExchange(
     Exchanges.COMMANDS,
     type=ExchangeType.DIRECT,
@@ -20,7 +25,11 @@ commands_exchange = RabbitExchange(
 )
 commands_dlx = RabbitExchange(
     Exchanges.COMMANDS_DLX,
-    type=ExchangeType.DIRECT,
+    type=ExchangeType.FANOUT,
+    durable=True,
+)
+commands_dlq = RabbitQueue(
+    Queues.COMMANDS_DLQ,
     durable=True,
 )
 
@@ -31,7 +40,11 @@ events_exchange = RabbitExchange(
 )
 events_dlx = RabbitExchange(
     Exchanges.EVENTS_DLX,
-    type=ExchangeType.TOPIC,
+    type=ExchangeType.FANOUT,
+    durable=True,
+)
+events_dlq = RabbitQueue(
+    Queues.EVENTS_DLQ,
     durable=True,
 )
 

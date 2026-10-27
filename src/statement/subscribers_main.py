@@ -6,8 +6,10 @@ from faststream import FastStream
 from statement.app.subscribers import main
 from statement.app.subscribers.base import (
     build_broker,
+    commands_dlq,
     commands_dlx,
     commands_exchange,
+    events_dlq,
     events_dlx,
     events_exchange,
 )
@@ -32,9 +34,14 @@ async def after_startup_hook() -> None:
     global heartbeat
 
     await broker.declare_exchange(commands_exchange)
-    await broker.declare_exchange(commands_dlx)
+    commands_dlx_robust = await broker.declare_exchange(commands_dlx)
+    commands_dlq_robust = await broker.declare_queue(commands_dlq)
+    await commands_dlq_robust.bind(commands_dlx_robust)
+
     await broker.declare_exchange(events_exchange)
-    await broker.declare_exchange(events_dlx)
+    events_dlx_robust = await broker.declare_exchange(events_dlx)
+    events_dlq_robust = await broker.declare_queue(events_dlq)
+    await events_dlq_robust.bind(events_dlx_robust)
 
     heartbeat = start_heartbeat(HEARTBEAT_FILE, broker)
 

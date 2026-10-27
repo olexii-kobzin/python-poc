@@ -29,7 +29,7 @@ async def get_tx_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-async def make_queries(connection: AsyncConnection) -> Queries:
+async def make_job_queries(connection: AsyncConnection) -> Queries:
     raw_connection = await connection.get_raw_connection()
     apg_connection = raw_connection.driver_connection
     return Queries(AsyncpgDriver(apg_connection))

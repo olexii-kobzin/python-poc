@@ -77,7 +77,7 @@ async def get_pgqueuer_queries(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Queries:
     connection = await session.connection()
-    return await deps.make_queries(connection)
+    return await deps.make_job_queries(connection)
 
 
 async def get_customer_account_repo(

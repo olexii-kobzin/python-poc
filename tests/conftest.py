@@ -119,7 +119,19 @@ async def pg_queuer(
 ) -> AsyncIterator[PgQueuer]:
     @asynccontextmanager
     async def session_scope() -> AsyncIterator[AsyncSession]:
-        yield session
+        factory = async_sessionmaker(
+            bind=session.bind,
+            class_=AsyncSession,
+            sync_session_class=VersionedSession,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+
+        nested_session = factory()
+        try:
+            yield nested_session
+        finally:
+            await nested_session.close()
 
     pgq = PgQueuer.in_memory(
         resources={"session_scope": session_scope, "broker": broker},
@@ -205,10 +217,15 @@ async def client(
     async def override_get_session() -> AsyncIterator[AsyncSession]:
         yield session
 
+    async def override_get_tx_session() -> AsyncIterator[AsyncSession]:
+        yield session
+        await session.commit()
+
     def override_get_token_verifier() -> TokenVerifier:
         return token_verifier
 
     app.dependency_overrides[fast_deps.get_session] = override_get_session
+    app.dependency_overrides[fast_deps.get_tx_session] = override_get_tx_session
     app.dependency_overrides[fast_deps.get_token_verifier] = override_get_token_verifier
 
     try:

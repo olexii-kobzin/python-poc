@@ -216,7 +216,10 @@ class CustomerAccountLedgerVerificationRepositoryImpl(
                 resolved_at=None,
                 detected_at=datetime.now(UTC),
             )
-            .on_conflict_do_nothing(index_elements=["account_id"])
+            .on_conflict_do_nothing(
+                index_elements=["account_id"],
+                index_where=CustomerAccountLedgerDiscrepancy.resolved_at.is_(None),
+            )
         )
 
     async def resolve_discrepancy(

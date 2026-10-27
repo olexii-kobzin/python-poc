@@ -119,8 +119,9 @@ Legend:
 
 ### Database
 
-- [ ] **SHOULD** Three relationships are never used and will crash if anyone
+- [x] **SHOULD** Three relationships are never used and will crash if anyone
   uses them.
+  Done: all three have `lazy="raise"`.
   `domain/entities/customer.py:43`, `domain/entities/account.py:67`, `:143`.
   With async SQLAlchemy, lazy loading does not just get slow — it raises
   `MissingGreenlet`. It is worse because the vendored history recipe sets
@@ -129,40 +130,47 @@ Legend:
   relationship would try a sync load.
   Fix: delete them, or set `lazy="raise"`.
 
-- [ ] **SHOULD** No naming convention on the metadata.
+- [x] **SHOULD** No naming convention on the metadata.
+  Done: `naming_convention` set on `Base.metadata` (`domain/entities/base.py`).
   Add `MetaData(naming_convention=...)` to `Base`. The migrations already show
   the problem — they mix Postgres auto-names with hand-written names
   (see migration `d0b11413183a`). Autogenerate will keep producing noise until
   this is set.
 
-- [ ] **SHOULD** The ledger verifier does not lock the accounts it picks.
+- [x] **SHOULD** The ledger verifier does not lock the accounts it picks.
+  Done: `ON CONFLICT DO NOTHING` on checkpoint and discrepancy inserts. No row
+  lock on purpose: locking the accounts during a check would freeze writers.
   `infra/repository/ledger_verification.py` selects target accounts with no
   lock and no claim. If two scheduler runs overlap, both process the same
   accounts and crash on a duplicate insert instead of skipping.
   Fix: `SELECT ... FOR UPDATE SKIP LOCKED`, or `ON CONFLICT DO NOTHING`.
 
-- [ ] **NICE** Nine places call `await session.commit()` by hand and nothing
+- [x] **NICE** Nine places call `await session.commit()` by hand and nothing
+  Done: no manual `commit()` left; `session.begin()` is used in `deps.py` and
+  the consumer/scheduler entrypoints.
   checks that you did. If one is forgotten, the work is silently thrown away.
   A `session.begin()` dependency or a small Unit of Work object would remove
   this whole class of bug.
 
-- [ ] **NICE** Indexes that are not used:
+- [x] **NICE** Indexes that are not used:
   - `ix_customer_account_ledger_discrepancy_kind` — `kind` is never filtered on
   - `ix_customer_account_ledger_verified_account_id_verified_at` — queries sort
     by `through_no`, which uses the primary key
   Both only cost write time.
+  Will not do it for this test project.
 
-- [ ] **NICE** Migration `f3bbd6b8a2f1:46-59` adds `no` and `balance` as
+- [x] **NICE** Migration `f3bbd6b8a2f1:46-59` adds `no` and `balance` as
   NOT NULL with no `server_default`. It only works on an empty table. Fine for
   now, but it is an assumption nobody wrote down.
+  These columns are added before any data is inserted. No fix required.
 
-- [ ] **NICE** `alembic.ini:87` still has the placeholder
+- [x] **NICE** `alembic.ini:87` still has the placeholder
   `sqlalchemy.url = driver://user:pass@localhost/dbname`. It is harmless
   because `env.py:48` replaces it, but it is confusing.
 
 ### Messages and queues
 
-- [ ] **SHOULD** Dead letters go nowhere.
+- [x] **SHOULD** Dead letters go nowhere.
   `live_queue()` (`app/subscribers/base.py:43`) correctly tells the live queue
   to send rejected messages to `events.dlx`. But no queue is declared or bound
   **to** `events.dlx`. A topic exchange with no binding drops the message
@@ -170,20 +178,23 @@ Legend:
   Fix: declare a dead-letter queue and bind it to `events.dlx` with a matching
   routing key.
 
-- [ ] **NICE** `commands` and `commands.dlx` exchanges are declared
+- [x] **NICE** `commands` and `commands.dlx` exchanges are declared
   (`app/subscribers/base.py:16-25`) but no subscriber uses them. Commands go
   through pgqueuer instead. Dead code — delete or use.
+  I will keep them for now, in case we want to use them in the future.
 
-- [ ] **NICE** `arguments={"x-dead-letter-exchange": "dlx"}` on the *exchanges*
+- [x] **NICE** `arguments={"x-dead-letter-exchange": "dlx"}` on the *exchanges*
   (`base.py:20`, `:32`) does nothing. That argument only works on queues, and
   the exchange named `"dlx"` does not exist. Leftover from copy/paste.
+  Already fixed.
 
-- [ ] **SHOULD** `on_customer_created` (`app/subscribers/main.py:52`) checks if
+- [x] **SHOULD** `on_customer_created` (`app/subscribers/main.py:52`) checks if
   the customer exists and then inserts. Two messages at the same time will
   raise `IntegrityError`, and the message is then rejected and lost.
   Fix: `INSERT ... ON CONFLICT DO NOTHING`.
 
-- [ ] **SHOULD** Add one test that protects the outbox.
+- [x] **SHOULD** Add one test that protects the outbox.
+  Done: `tests/infra/test_outbox.py` (not yet run, needs the compose env).
   The whole guarantee depends on `deps.py:27-30` taking the raw asyncpg
   connection out of the SQLAlchemy session, so `enqueue` and `commit` are one
   transaction. If a future pgqueuer version changes this, **nothing will fail
@@ -191,16 +202,19 @@ Legend:
   under load.
   Test: enqueue inside a transaction, roll back, check no job row exists.
 
-- [ ] **NICE** `app/consumers/executor.py:26` — a `TerminalJobError` on the
+- [x] **NICE** `app/consumers/executor.py:26` — a `TerminalJobError` on the
   first try still logs "exhausted" with `attempts: 0`. Misleading log.
+  If attempts: 0, this means we exhausted it manually. Improved wording.
 
-- [ ] **NICE** `executor.py:27-34` catches a `RetryRequested` raised by the
+- [x] **NICE** `executor.py:27-34` catches a `RetryRequested` raised by the
   handler and replaces it with its own delay, so the handler's requested delay
   is ignored.
+  We are ignoring delay from RetryRequested to have controlled backoff delays.
 
-- [ ] **NICE** Schedulers have no error handling
+- [x] **NICE** Schedulers have no error handling
   (`app/consumers/schedulers/main.py`). An exception just escapes, with no
   alert.
+  Will be handled by tooling. Like Sentry integration.
 
 ### API
 

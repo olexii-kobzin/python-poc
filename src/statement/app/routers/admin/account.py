@@ -71,6 +71,7 @@ async def create_customer_account(
             created_by=principal.sub,
         )
     )
+    await session.flush()
 
     event = CustomerAccountCreated(
         id=account.id,
@@ -123,6 +124,7 @@ async def updated_customer_account(
         account.status = account_update.status
     account.updated_by = principal.sub
     session.add(account)
+    await session.flush()
 
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -161,6 +163,7 @@ async def delete_customer_account(
     account.status = CustomerAccountStatus.DELETED
     account.updated_by = principal.sub
     session.add(account)
+    await session.flush()
 
 
 @router.get("/accounts")
