@@ -38,6 +38,7 @@ def make_token(
     issuer: str = TEST_ISSUER,
     expires_in: int = 300,
     audience: str | None = None,
+    extra_claims: dict[str, Any] | None = None,
 ) -> str:
     now = datetime.now(UTC)
     claims: dict[str, Any] = {
@@ -49,5 +50,7 @@ def make_token(
     }
     if audience is not None:
         claims["aud"] = audience
+    if extra_claims:
+        claims.update(extra_claims)
 
     return jwt.encode(claims, private_key, algorithm="RS256")

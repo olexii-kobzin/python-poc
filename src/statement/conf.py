@@ -38,5 +38,14 @@ class Settings(BaseSettings):
 
         return self
 
+    @model_validator(mode="after")
+    def _audience_required_outside_local(self) -> Self:
+        # without an audience the verifier accepts any token from a trusted
+        # issuer, even one minted for a different application
+        if self.app_env in (AppEnv.DEV, AppEnv.PROD) and not self.jwt_audience:
+            raise ValueError("jwt_audience is required in dev and prod environments")
+
+        return self
+
 
 settings = Settings()

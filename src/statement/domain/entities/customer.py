@@ -50,7 +50,7 @@ class Customer(Base):
         cls,
         entity_id: UUID,
         email: str,
-        name: str,
+        name: str | None,
         status: CustomerStatus,
         created_at: datetime,
         updated_at: datetime | None,

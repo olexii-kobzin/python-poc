@@ -65,7 +65,7 @@ async def test_update_account_with_permission(
     account = await set_up_account(session, customer)
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={"version": current_version(account), "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
@@ -92,7 +92,7 @@ async def test_update_account_deactivates(
     account = await set_up_account(session, customer)
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={
             "version": current_version(account),
             "status": CustomerAccountStatus.DISABLED,
@@ -126,7 +126,7 @@ async def test_update_account_reactivates(
     )
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={
             "version": current_version(account),
             "status": CustomerAccountStatus.ACTIVE,
@@ -161,7 +161,7 @@ async def test_update_account_without_status_leaves_it_alone(
     )
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={"version": current_version(account), "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
@@ -189,7 +189,7 @@ async def test_update_account_cannot_set_deleted(
     account = await set_up_account(session, customer)
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={
             "version": current_version(account),
             "name": "main",
@@ -221,7 +221,7 @@ async def test_update_deleted_account_is_rejected(
     )
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={
             "version": current_version(account),
             "name": "renamed",
@@ -248,7 +248,7 @@ async def test_update_account_not_found(
     auth_headers: AuthHeaders,
 ) -> None:
     response = await client.patch(
-        f"/v1/accounts/{uuid7()}",
+        f"/v1/admin/accounts/{uuid7()}",
         json={"version": version_token.issue(uuid7(), 1), "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
@@ -268,7 +268,7 @@ async def test_update_account_with_stale_version_is_rejected(
     stale = version_token.issue(account.id, account.version - 1)
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={"version": stale, "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
@@ -303,7 +303,7 @@ async def test_update_account_loses_race_after_version_check(
     )
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={"version": token, "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
@@ -320,7 +320,7 @@ async def test_update_account_without_token(
     account = await set_up_account(session, customer)
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={"version": current_version(account), "name": "renamed"},
     )
 
@@ -346,7 +346,7 @@ async def test_update_account_without_permission(
     account = await set_up_account(session, customer)
 
     response = await client.patch(
-        f"/v1/accounts/{account.id}",
+        f"/v1/admin/accounts/{account.id}",
         json={"version": current_version(account), "name": "renamed"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_CREATE]),
     )

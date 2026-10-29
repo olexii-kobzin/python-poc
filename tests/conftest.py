@@ -2,7 +2,6 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Protocol
-from unittest.mock import AsyncMock
 
 import anyio
 import pytest
@@ -72,15 +71,8 @@ def auth_headers(rsa_private_key: RSAPrivateKey) -> AuthHeaders:
 # TestRabbitBroker is only the patching context manager; entering it
 # yields the passed-in RabbitBroker itself, patched for in-memory delivery
 async def broker() -> AsyncIterator[RabbitBroker]:
-    real_broker = deps.get_broker()
-    original_publish = real_broker.publish
-    real_broker.publish = AsyncMock()  # type: ignore[method-assign]
-
-    try:
-        async with TestRabbitBroker(real_broker) as test_broker:
-            yield test_broker
-    finally:
-        real_broker.publish = original_publish  # type: ignore[method-assign]
+    async with TestRabbitBroker(deps.get_broker()) as test_broker:
+        yield test_broker
 
 
 @pytest.fixture(scope="session")

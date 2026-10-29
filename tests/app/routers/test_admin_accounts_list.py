@@ -58,7 +58,7 @@ async def list_accounts(
     **params: Any,
 ) -> dict[str, Any]:
     response = await client.get(
-        "/v1/accounts",
+        "/v1/admin/accounts",
         params=params,
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_GET]),
     )
@@ -124,7 +124,7 @@ async def test_list_not_requires_sort(
     auth_headers: AuthHeaders,
 ) -> None:
     response = await client.get(
-        "/v1/accounts",
+        "/v1/admin/accounts",
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_GET]),
     )
 
@@ -138,7 +138,7 @@ async def test_list_rejects_malformed_sort(
     auth_headers: AuthHeaders,
 ) -> None:
     response = await client.get(
-        "/v1/accounts",
+        "/v1/admin/accounts",
         params={"sort": "created_at"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_GET]),
     )
@@ -271,7 +271,7 @@ async def test_list_rejects_garbage_cursor(
     auth_headers: AuthHeaders,
 ) -> None:
     response = await client.get(
-        "/v1/accounts",
+        "/v1/admin/accounts",
         params={"sort": "created_at:desc", "cursor": "not-base64"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_GET]),
     )
@@ -366,6 +366,44 @@ async def test_list_filters_by_name_substring(
 
 
 @pytest.mark.anyio
+async def test_list_name_filter_is_case_insensitive(
+    client: AsyncClient,
+    session: AsyncSession,
+    auth_headers: AuthHeaders,
+) -> None:
+    token, accounts = await add_accounts(session, [{"name": "Savings"}])
+    (savings,) = accounts
+
+    payload = await list_accounts(client, auth_headers, name=f"{token}-SAVINGS")
+
+    assert ids_of(payload) == [savings.id]
+
+
+@pytest.mark.anyio
+async def test_list_name_filter_treats_like_wildcards_literally(
+    client: AsyncClient,
+    session: AsyncSession,
+    auth_headers: AuthHeaders,
+) -> None:
+    token, accounts = await add_accounts(
+        session,
+        [
+            {"currency": Currency.EUR, "name": "a_b"},
+            {"currency": Currency.USD, "name": "axb"},
+            {"currency": Currency.GBP, "name": "100%"},
+            {"currency": Currency.UAH, "name": "100x"},
+        ],
+    )
+    underscore, _, percent, _ = accounts
+
+    by_underscore = await list_accounts(client, auth_headers, name=f"{token}-a_b")
+    by_percent = await list_accounts(client, auth_headers, name=f"{token}-100%")
+
+    assert ids_of(by_underscore) == [underscore.id]
+    assert ids_of(by_percent) == [percent.id]
+
+
+@pytest.mark.anyio
 async def test_list_filters_by_created_at_range(
     client: AsyncClient,
     session: AsyncSession,
@@ -404,7 +442,9 @@ async def test_list_without_token(
     client: AsyncClient,
     session: AsyncSession,
 ) -> None:
-    response = await client.get("/v1/accounts", params={"sort": "created_at:desc"})
+    response = await client.get(
+        "/v1/admin/accounts", params={"sort": "created_at:desc"}
+    )
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.headers["WWW-Authenticate"] == "Bearer"
@@ -417,7 +457,7 @@ async def test_list_without_permission(
     auth_headers: AuthHeaders,
 ) -> None:
     response = await client.get(
-        "/v1/accounts",
+        "/v1/admin/accounts",
         params={"sort": "created_at:desc"},
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_CREATE]),
     )

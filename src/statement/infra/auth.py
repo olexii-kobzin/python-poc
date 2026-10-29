@@ -8,6 +8,9 @@ from jwt import InvalidIssuerError, InvalidTokenError, PyJWKClient
 from statement.app.auth import Principal
 
 ALGORITHMS = ["RS256"]
+# tolerated clock drift between the issuer and this service, in seconds
+LEEWAY = 15
+JWKS_TIMEOUT = 3
 
 
 class TokenVerifier:
@@ -16,6 +19,12 @@ class TokenVerifier:
         trusted_issuers: Mapping[str, Sequence[str]],
         audience: str | None = None,
     ) -> None:
+        # an empty prefix matches every scope in startswith(), which would turn
+        # the issuer allowlist into "assert anything"
+        for issuer, prefixes in trusted_issuers.items():
+            if not prefixes or any(not prefix for prefix in prefixes):
+                raise ValueError(f"Issuer {issuer} needs non-empty scope prefixes")
+
         # issuer url -> scope prefixes this issuer is allowed to assert
         self._trusted_issuers = {
             issuer: tuple(prefixes) for issuer, prefixes in trusted_issuers.items()
@@ -34,11 +43,17 @@ class TokenVerifier:
             algorithms=ALGORITHMS,
             issuer=issuer,
             audience=self._audience,
+            leeway=LEEWAY,
             options={
                 "verify_aud": self._audience is not None,
-                "require": ["exp", "iss", "sub"],
+                "require": ["exp", "iat", "iss", "sub"],
             },
         )
+
+        # Cognito marks id tokens with token_use=id; only access tokens may
+        # call the API. Issuers that do not send the claim are unaffected.
+        if claims.get("token_use", "access") != "access":
+            raise InvalidTokenError("Only access tokens are accepted")
 
         return Principal(
             sub=self._parse_sub(claims),
@@ -49,7 +64,7 @@ class TokenVerifier:
         jwks_client = self._jwks_clients.get(issuer)
         if jwks_client is None:
             jwks_url = f"{issuer.rstrip('/')}/.well-known/jwks.json"
-            jwks_client = PyJWKClient(jwks_url)
+            jwks_client = PyJWKClient(jwks_url, timeout=JWKS_TIMEOUT)
             self._jwks_clients[issuer] = jwks_client
 
         return jwks_client.get_signing_key_from_jwt(token).key

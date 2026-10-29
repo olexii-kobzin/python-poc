@@ -54,7 +54,7 @@ async def test_delete_flips_status_to_deleted(
 
     sub = uuid7()
     response = await client.delete(
-        f"/v1/accounts/{account.id}?version={current_version(account)}",
+        f"/v1/admin/accounts/{account.id}?version={current_version(account)}",
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_DELETE], str(sub)),
     )
 
@@ -77,7 +77,25 @@ async def test_delete_unknown_account(
     auth_headers: AuthHeaders,
 ) -> None:
     response = await client.delete(
-        f"/v1/accounts/{uuid7()}?version={version_token.issue(uuid7(), 1)}",
+        f"/v1/admin/accounts/{uuid7()}?version={version_token.issue(uuid7(), 1)}",
+        headers=auth_headers([Permission.ADMIN_ACCOUNTS_DELETE]),
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.anyio
+async def test_delete_already_deleted_account(
+    client: AsyncClient,
+    session: AsyncSession,
+    auth_headers: AuthHeaders,
+) -> None:
+    account = await add_account(session)
+    account.status = CustomerAccountStatus.DELETED
+    await session.flush()
+
+    response = await client.delete(
+        f"/v1/admin/accounts/{account.id}?version={current_version(account)}",
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_DELETE]),
     )
 
@@ -92,7 +110,7 @@ async def test_delete_without_token(
     account = await add_account(session)
 
     response = await client.delete(
-        f"/v1/accounts/{account.id}?version={current_version(account)}",
+        f"/v1/admin/accounts/{account.id}?version={current_version(account)}",
     )
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -112,7 +130,7 @@ async def test_delete_without_permission(
     account = await add_account(session)
 
     response = await client.delete(
-        f"/v1/accounts/{account.id}?version={current_version(account)}",
+        f"/v1/admin/accounts/{account.id}?version={current_version(account)}",
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_UPDATE]),
     )
 
@@ -135,7 +153,7 @@ async def test_delete_with_stale_version_is_rejected(
     stale = version_token.issue(account.id, account.version - 1)
 
     response = await client.delete(
-        f"/v1/accounts/{account.id}?version={stale}",
+        f"/v1/admin/accounts/{account.id}?version={stale}",
         headers=auth_headers([Permission.ADMIN_ACCOUNTS_DELETE]),
     )
 

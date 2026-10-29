@@ -143,14 +143,16 @@ class CustomerAccountLedger(Base):
     customer_account: Mapped[CustomerAccount] = relationship(lazy="raise")
 
     @classmethod
-    def create(cls, entity_id: UUID, created_by: UUID | None) -> Self:
+    def create(cls, account_id: UUID, created_by: UUID | None) -> Self:
         return cls(
-            account_id=entity_id,
+            account_id=account_id,
             no=1,
             amount=Decimal(0),
             balance=Decimal(0),
             operation_type=LedgerOperationType.CREATE,
-            operation_id=entity_id,
+            # the opening row has no payment behind it; the account's own id
+            # stands in as its operation id
+            operation_id=account_id,
             created_at=datetime.now(UTC),
             created_by=created_by,
         )

@@ -7,10 +7,6 @@ from pydantic import BaseModel, Field, field_validator
 from statement.app.schemas.base import SortDirection
 
 
-class InvalidPaginationCursor(ValueError):
-    pass
-
-
 class PaginatedQuery[T](BaseModel):
     cursor: T | None = None
     count: Annotated[int | None, Field(ge=1, le=100)] = None

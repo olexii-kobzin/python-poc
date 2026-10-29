@@ -125,7 +125,10 @@ class CustomerAccountReadRepositoryImpl(CustomerAccountReadRepository):
             stmt = stmt.where(build_cursor_condition(cursor_ordering, cursor_values))
 
         if query.name is not None:
-            stmt = stmt.where(CustomerAccount.name.like(f"%{query.name}%"))
+            escaped = (
+                query.name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            stmt = stmt.where(CustomerAccount.name.ilike(f"%{escaped}%", escape="\\"))
 
         if query.currency is not None:
             stmt = stmt.where(CustomerAccount.currency == query.currency)

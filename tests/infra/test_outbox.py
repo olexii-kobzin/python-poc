@@ -32,8 +32,10 @@ async def test_enqueue_is_rolled_back_with_the_session_transaction(
     """
     entrypoint = f"test_outbox_{uuid7()}"
 
-    async with (db_engine.connect() as connection,
-                AsyncSession(bind=connection) as session):
+    async with (
+        db_engine.connect() as connection,
+        AsyncSession(bind=connection) as session,
+    ):
         tx = await session.begin()
         await session.execute(sa.text("SELECT 1"))
         queries = await deps.make_job_queries(await session.connection())

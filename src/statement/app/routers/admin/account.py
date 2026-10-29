@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID, uuid7
 
 import structlog
@@ -13,6 +13,7 @@ from fastapi import (
     status,
 )
 from pgqueuer import Queries
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from statement import fast_deps
@@ -42,7 +43,7 @@ from statement.domain.entities.account import (
 from statement.domain.repository import CustomerAccountRepository
 from statement.infra.request_id import propagation_headers
 
-router = APIRouter(prefix="/v1")
+router = APIRouter(prefix="/v1/admin")
 log = structlog.get_logger(__name__)
 
 
@@ -55,7 +56,7 @@ async def create_customer_account(
         Principal,
         Security(fast_deps.get_principal, scopes=[Permission.ADMIN_ACCOUNTS_CREATE]),
     ],
-) -> None:
+) -> dict[str, Any]:
     account = CustomerAccount.create(
         entity_id=uuid7(),
         customer_id=account_create.customer_id,
@@ -67,11 +68,15 @@ async def create_customer_account(
     session.add(account)
     session.add(
         CustomerAccountLedger.create(
-            entity_id=account.id,
+            account_id=account.id,
             created_by=principal.sub,
         )
     )
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as err:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err))\
+            from err
 
     event = CustomerAccountCreated(
         id=account.id,
@@ -89,6 +94,8 @@ async def create_customer_account(
         dedupe_key=event.dedupe_key(),
         headers=propagation_headers(),
     )
+
+    return {"id": account.id}
 
 
 @router.patch("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -148,7 +155,7 @@ async def delete_customer_account(
     ],
 ) -> None:
     account = await repo.find_by_id(account_id)
-    if account is None:
+    if account is None or account.status == CustomerAccountStatus.DELETED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account not found",
@@ -188,9 +195,9 @@ async def get_accounts(
     )
 
 
-@router.get("/accounts/{id}/ledger/discrepancy")
+@router.get("/accounts/{account_id}/ledger/discrepancy")
 async def get_customer_account_ledger_discrepancy(
-    id: Annotated[UUID, Path()],
+    account_id: Annotated[UUID, Path()],
     repo: Annotated[
         CustomerAccountLedgerVerificationRepository,
         Depends(fast_deps.get_ledger_verification_repo),
@@ -203,14 +210,14 @@ async def get_customer_account_ledger_discrepancy(
         ),
     ],
 ) -> LedgerDiscrepancyDisplay:
-    discrepancy = await repo.find_open_discrepancy(id)
+    discrepancy = await repo.find_open_discrepancy(account_id)
     if discrepancy is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No open ledger discrepancy for this account",
         )
 
-    checkpoint = await repo.find_latest_checkpoint(id)
+    checkpoint = await repo.find_latest_checkpoint(account_id)
 
     return LedgerDiscrepancyDisplay(
         id=discrepancy.account_id,
@@ -225,11 +232,11 @@ async def get_customer_account_ledger_discrepancy(
 
 
 @router.post(
-    "/accounts/{id}/ledger/discrepancy/resolve",
+    "/accounts/{account_id}/ledger/discrepancy/resolve",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def resolve_customer_account_ledger_discrepancy(
-    id: Annotated[UUID, Path()],
+    account_id: Annotated[UUID, Path()],
     resolution: Annotated[LedgerDiscrepancyResolve, Body()],
     session: Annotated[AsyncSession, Depends(fast_deps.get_tx_session)],
     repo: Annotated[
@@ -251,14 +258,14 @@ async def resolve_customer_account_ledger_discrepancy(
     it is insert-only, so the superseded row is the record of what was believed
     before, which is exactly what you want when auditing the incident later.
     """
-    discrepancy_dto = await repo.find_open_discrepancy(id)
+    discrepancy_dto = await repo.find_open_discrepancy(account_id)
     if discrepancy_dto is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No open ledger discrepancy for this account",
         )
 
-    checkpoint = await repo.find_latest_checkpoint(id)
+    checkpoint = await repo.find_latest_checkpoint(account_id)
     anchor_no = checkpoint.through_no if checkpoint else 0
 
     # for a gap or a balance break, the broken row is the narrowest thing to
@@ -271,7 +278,7 @@ async def resolve_customer_account_ledger_discrepancy(
     )
     if through_no is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 "through_no is required for an anchor_balance discrepancy: "
                 "the break is on the row that is already checkpointed"
@@ -280,18 +287,20 @@ async def resolve_customer_account_ledger_discrepancy(
 
     if through_no <= anchor_no:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"through_no must be greater than {anchor_no}",
         )
 
-    balance = await repo.find_ledger_balance(id, through_no)
+    balance = await repo.find_ledger_balance(account_id, through_no)
     if balance is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"No ledger row {through_no} for this account",
         )
 
-    await repo.add_checkpoint(account_id=id, through_no=through_no, balance=balance)
+    await repo.add_checkpoint(
+        account_id=account_id, through_no=through_no, balance=balance
+    )
     await repo.resolve_discrepancy(
         discrepancy_id=discrepancy_dto.discrepancy_id,
         account_id=discrepancy_dto.account_id,
@@ -301,7 +310,7 @@ async def resolve_customer_account_ledger_discrepancy(
     log.warning(
         "customer_account_ledger.discrepancy.resolved",
         details={
-            "account_id": str(id),
+            "account_id": str(account_id),
             "kind": discrepancy_dto.kind,
             "no": discrepancy_dto.no,
             "accepted_through_no": through_no,

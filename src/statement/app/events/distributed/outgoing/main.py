@@ -4,7 +4,7 @@ from uuid import UUID
 from statement.app.messages_base import BaseOutgoingDistributedMessage
 
 
-class CustomerAccountCreated(BaseOutgoingDistributedMessage):
+class CustomerAccountCreatedOutgoing(BaseOutgoingDistributedMessage):
     id: UUID
     customer_id: UUID
     currency: str

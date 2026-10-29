@@ -15,10 +15,6 @@ FormattedDateTime = Annotated[
 ]
 
 
-class InvalidPaginationCursor(ValueError):
-    pass
-
-
 class PaginatedResponseMeta(BaseModel):
     next_cursor: str | None = None
 

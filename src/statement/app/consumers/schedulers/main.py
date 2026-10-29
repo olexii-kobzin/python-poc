@@ -14,7 +14,7 @@ log = structlog.get_logger(__name__)
 def register_jobs(pgq: PgQueuer) -> None:
     @pgq.schedule("interval", expression="* * * * * */15", clean_old=True)
     async def interval(schedule: Schedule) -> None:
-        print(datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f"))
+        log.debug("scheduler.interval", details={"at": datetime.now(UTC).isoformat()})
 
     @pgq.schedule(
         "customer_account_ledger_verify",

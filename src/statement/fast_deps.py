@@ -67,7 +67,7 @@ def get_principal(
     if missing:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Missing permissions: {', '.join(missing)}",
+            detail="Insufficient permissions",
         )
 
     return principal

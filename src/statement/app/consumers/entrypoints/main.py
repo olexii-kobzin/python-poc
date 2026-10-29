@@ -10,7 +10,7 @@ from statement.app.commands.local.main import CreatePayment
 from statement.app.consumers.executor import DlqRetryEntrypointExecutor
 from statement.app.errors.main import TerminalJobError
 from statement.app.events.distributed.outgoing.main import (
-    CustomerAccountCreated as CustomerAccountCreatedOutgoing,
+    CustomerAccountCreatedOutgoing,
 )
 from statement.app.events.local.main import CustomerAccountCreated
 from statement.app.messages_base import BaseAsyncMessage

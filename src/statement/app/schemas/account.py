@@ -47,7 +47,7 @@ class CustomerAccountDisplay(BaseModel):
     id: UUID
     customer_id: UUID
     currency: Currency
-    name: str
+    name: str | None
     status: CustomerAccountStatus
     created_at: FormattedDateTime
     updated_at: FormattedDateTime

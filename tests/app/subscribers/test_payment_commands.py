@@ -115,7 +115,7 @@ async def test_redelivered_event_reuses_the_dedupe_key(
 
 
 @pytest.mark.anyio
-async def test_deposit_and_withdrawal_of_one_entity_id_do_not_collide(
+async def test_deposit_and_withdrawal_of_one_entity_id_share_a_dedupe_key(
     session: AsyncSession,
     queries: AsyncMock,
 ) -> None:

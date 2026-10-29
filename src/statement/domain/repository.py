@@ -16,6 +16,8 @@ class CustomerRepository(Protocol):
         pass
 
 
+# not runtime_checkable on purpose: only used through FastAPI Depends, never as
+# a subscriber handler param, so nothing builds an isinstance check for it
 class CustomerAccountRepository(Protocol):
     @abstractmethod
     async def find_by_id(self, entity_id: UUID) -> CustomerAccount | None:
