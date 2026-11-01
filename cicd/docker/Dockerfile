@@ -23,8 +23,6 @@ COPY tests ./tests
 COPY alembic.ini ./alembic.ini
 COPY migrations ./migrations
 
-CMD ["pytest"]
-
 FROM python:3.14-slim-trixie AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
