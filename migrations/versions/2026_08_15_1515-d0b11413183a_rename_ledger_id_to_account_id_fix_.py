@@ -153,18 +153,6 @@ def upgrade() -> None:
         ["kind"],
         unique=False,
     )
-    op.drop_constraint(
-        op.f("customer_account_ledger_discrepancy_id_fkey"),
-        "customer_account_ledger_discrepancy",
-        type_="foreignkey",
-    )
-    op.create_foreign_key(
-        "fk_customer_account_ledger_discrepancy_account_id",
-        "customer_account_ledger_discrepancy",
-        "customer_account",
-        ["account_id"],
-        ["id"],
-    )
     op.alter_column(
         "customer_account_ledger_verified", "id", new_column_name="account_id"
     )
@@ -178,36 +166,12 @@ def upgrade() -> None:
         ["account_id", "verified_at"],
         unique=False,
     )
-    op.drop_constraint(
-        op.f("customer_account_ledger_verified_id_fkey"),
-        "customer_account_ledger_verified",
-        type_="foreignkey",
-    )
-    op.create_foreign_key(
-        "fk_customer_account_ledger_verified_account_id",
-        "customer_account_ledger_verified",
-        "customer_account",
-        ["account_id"],
-        ["id"],
-    )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     op.alter_column(
         "customer_account_ledger_verified", "account_id", new_column_name="id"
-    )
-    op.drop_constraint(
-        "fk_customer_account_ledger_verified_account_id",
-        "customer_account_ledger_verified",
-        type_="foreignkey",
-    )
-    op.create_foreign_key(
-        op.f("customer_account_ledger_verified_id_fkey"),
-        "customer_account_ledger_verified",
-        "customer_account",
-        ["id"],
-        ["id"],
     )
     op.drop_index(
         "ix_customer_account_ledger_verified_account_id_verified_at",
@@ -221,18 +185,6 @@ def downgrade() -> None:
     )
     op.alter_column(
         "customer_account_ledger_discrepancy", "account_id", new_column_name="id"
-    )
-    op.drop_constraint(
-        "fk_customer_account_ledger_discrepancy_account_id",
-        "customer_account_ledger_discrepancy",
-        type_="foreignkey",
-    )
-    op.create_foreign_key(
-        op.f("customer_account_ledger_discrepancy_id_fkey"),
-        "customer_account_ledger_discrepancy",
-        "customer_account",
-        ["id"],
-        ["id"],
     )
     op.drop_index(
         op.f("ix_customer_account_ledger_discrepancy_kind"),

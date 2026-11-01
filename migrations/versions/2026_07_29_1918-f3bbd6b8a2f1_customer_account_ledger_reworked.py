@@ -58,10 +58,10 @@ def upgrade() -> None:
         "customer_account_ledger", sa.Column("created_by", sa.Uuid(), nullable=True)
     )
     op.drop_constraint(
-        "customer_account_ledger_pkey", "customer_account_ledger", type_="primary"
+        "pk_customer_account_ledger", "customer_account_ledger", type_="primary"
     )
     op.create_primary_key(
-        "customer_account_ledger_pkey", "customer_account_ledger", ["id", "no"]
+        "pk_customer_account_ledger", "customer_account_ledger", ["id", "no"]
     )
     op.drop_index(
         op.f("ix_customer_account_ledger_created_at"),
@@ -83,7 +83,7 @@ def upgrade() -> None:
         ["id", "operation_id"],
     )
     op.drop_constraint(
-        op.f("customer_account_ledger_customer_account_id_fkey"),
+        op.f("fk_customer_account_ledger_customer_account_id_customer_account"),
         "customer_account_ledger",
         type_="foreignkey",
     )
@@ -111,7 +111,7 @@ def downgrade() -> None:
         type_="foreignkey",
     )
     op.create_foreign_key(
-        op.f("customer_account_ledger_customer_account_id_fkey"),
+        op.f("fk_customer_account_ledger_customer_account_id_customer_account"),
         "customer_account_ledger",
         "customer_account",
         ["customer_account_id"],
@@ -138,10 +138,10 @@ def downgrade() -> None:
         unique=False,
     )
     op.drop_constraint(
-        "customer_account_ledger_pkey", "customer_account_ledger", type_="primary"
+        "pk_customer_account_ledger", "customer_account_ledger", type_="primary"
     )
     op.create_primary_key(
-        "customer_account_ledger_pkey", "customer_account_ledger", ["id"]
+        "pk_customer_account_ledger", "customer_account_ledger", ["id"]
     )
     op.drop_column("customer_account_ledger", "created_by")
     op.drop_column("customer_account_ledger", "balance")

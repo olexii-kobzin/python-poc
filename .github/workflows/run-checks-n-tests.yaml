@@ -42,5 +42,7 @@ jobs:
       run: $RUN ruff check
     - name: Apply migrations
       run: $RUN alembic upgrade head
+    - name: Install PgQueuer tables
+      run: $RUN sh -c 'pgq install && pgq verify --expect present'
     - name: Run tests
       run: $RUN pytest
