@@ -11,20 +11,36 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  RUN: docker run --rm --network host --env-file .github/workflows/github.env test-image
+
 jobs:
   checks-n-tests:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.2
+        env:
+          POSTGRES_USER: db_user
+          POSTGRES_PASSWORD: db_password
+          POSTGRES_DB: test_db
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
     - name: Check out repository code
       uses: actions/checkout@v7
     - name: Build Docker image
-      run: docker image build --file ./cicd/docker/Dockerfile --target test --tag statement-test .
-    - name: Create Docker container
-      run: docker container run --name statement-test-c statement-test
+      run: docker image build --file ./cicd/docker/Dockerfile --target test --tag test-image .
     - name: Run mypy
-      run: docker container run statement-test-c uv run mypy src tests
+      run: $RUN mypy src tests
     - name: Run ruff
-      run: docker container run statement-test-c uv run ruff check
+      run: $RUN ruff check
+    - name: Apply migrations
+      run: $RUN alembic upgrade head
     - name: Run tests
-      run: docker container run statement-test-c uv run pytest
+      run: $RUN pytest
